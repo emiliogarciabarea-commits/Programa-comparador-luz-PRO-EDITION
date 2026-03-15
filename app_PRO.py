@@ -12,25 +12,22 @@ def extraer_datos_factura(pdf_path):
         for pagina in pdf.pages:
             texto_completo += pagina.extract_text() + "\n"
 
-    # 1. Búsqueda de Consumos (Adaptada para El Corte Inglés y otros formatos)
+    # 1. Búsqueda de Consumos (Adaptada para formato tabla de El Corte Inglés)
     patrones_consumo = {
         'punta': [
             r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', 
             r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh',
-            # Patrón específico para tabla: Fila "Consumo kWh" columna "Punta"
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)'
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)' # Nueva regla ECI
         ],
         'llano': [
             r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', 
             r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh',
-            # Patrón para columna "Llano"
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+([\d,.]+)'
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+([\d,.]+)' # Nueva regla ECI
         ],
         'valle': [
             r'Consumo\s+en\s+P3:?\s*([\d,.]+)\s*kWh', 
             r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh',
-            # Patrón para columna "Valle"
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+[\d,.]+\s+([\d,.]+)'
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+[\d,.]+\s+([\d,.]+)' # Nueva regla ECI
         ]
     }
     
@@ -43,19 +40,20 @@ def extraer_datos_factura(pdf_path):
                 consumos[tramo] = float(match.group(1).replace(',', '.'))
                 break
 
-    # 2. Búsqueda de Potencia (Adaptada para tabla "Potencia contratada kW" columna "Punta")
-    patrones_potencia = [
-        r'(?:Potencia\s+contratada(?:\s+en\s+punta-llano|\s+P1)?):\s*([\d,.]+)\s*kW',
-        # Patrón para Energía El Corte Inglés
-        r'Potencia\s+contratada\s+kW\s+Precio\s+€/kW\s+y\s+día\s+Potencia\s+facturada\s+Punta\s+Valle\s+([\d,.]+)'
-    ]
-    
-    potencia = 0.0
-    for patron in patrones_potencia:
-        match_potencia = re.search(patron, texto_completo, re.IGNORECASE)
-        if match_potencia:
-            potencia = float(match_potencia.group(1).replace(',', '.'))
-            break
+    # 2. Búsqueda de Potencia (Adaptada para formato "Potencia contratada kW" -> "Punta")
+    # Este patrón busca "Potencia contratada kW" y captura el primer valor numérico (Punta)
+    patron_potencia = r'(?:Potencia\s+contratada(?:\s+en\s+punta-llano|\s+P1| kW)?):\s*(?:Punta:?\s*)?([\d,.]+)\s*kW'
+    # Regla específica para la tabla de ECI: busca la cabecera de la tabla y captura el valor de abajo
+    if "Potencia contratada kW" in texto_completo:
+        match_tabla_pot = re.search(r'Potencia\s+contratada\s+kW\s+Precio\s+€/kW\s+y\s+día\s+Potencia\s+facturada\s+Punta\s+Valle\s+([\d,.]+)', texto_completo, re.IGNORECASE)
+        if match_tabla_pot:
+            potencia = float(match_tabla_pot.group(1).replace(',', '.'))
+        else:
+            match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
+            potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
+    else:
+        match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
+        potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
 
     # 3. Fecha y Días
     patron_fecha = r'(?:emitida\s+el|Fecha\s+de\s+emisión:)\s*([\d/]+\s*(?:de\s+\w+\s+de\s+)?\d{2,4})'
@@ -95,7 +93,9 @@ def extraer_datos_factura(pdf_path):
         "Total Real": total_real
     }
 
-# --- EL RESTO DEL CÓDIGO (INTERFAZ Y LÓGICA DE COMPARATIVA) PERMANECE IGUAL ---
+# --- EL RESTO DEL CÓDIGO PERMANECE EXACTAMENTE IGUAL ---
+# (Se mantiene la Interfaz Streamlit, el procesamiento de tarifas y el renderizado de tablas)
+
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
@@ -191,4 +191,3 @@ else:
                 st.success(f"💡 **Oportunidad de Ahorro:** Cambiándote a **{mejor['Compañía/Tarifa']}** podrías ahorrar **{mejor['Ahorro']} €** en este recibo.")
             else:
                 st.info("✅ Tu tarifa actual parece ser la más competitiva por ahora.")
-
