@@ -43,18 +43,20 @@ def extraer_datos_factura(pdf_path):
                 consumos[tramo] = float(match.group(1).replace(',', '.'))
                 break
 
-    # 2. Búsqueda de Potencia (Ajustado específicamente para Energía XXI)
-    patron_potencia = r'(?:Potencia:?\s*Punta:?|Potencia\s+contratada\s+en\s+punta-llano:?|Potencia\s+contratada\s+kW|Potencia\s+contratada|Potencia\s+P1:?)[\s\n]*([\d,.]+)'
+    # 2. Búsqueda de Potencia (Ajustado para El Corte Inglés y Energía XXI)
+    # Se añade soporte para el formato "P1 (Punta-llano) X,XXX kW"
+    patron_potencia = r'(?:Potencia:?\s*Punta:?|Potencia\s+contratada\s+kW|Potencia\s+contratada|Potencia\s+P1:?|P1\s+\(Punta-llano\))[\s\n]*([\d,.]+)'
     match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
     potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
 
-    # 3. Fecha (Ajustado para Energía XXI "emitida el X de X de X")
-    patron_fecha = r'(?:Fecha\s+de\s+emisión:|emitida\s+el|Fecha\s+de\s+Factura:)\s*([\d]{1,2}(?:\s+de\s+\w+\s+de\s+\d{4})|[\d/]+)'
+    # 3. Fecha y Días (Ajuste para Energía XXI)
+    # Se mejora para leer fechas con meses en texto o formato numérico
+    patron_fecha = r'(?:Fecha\s+de\s+emisión:|emitida\s+el|Fecha\s+de\s+Factura:)\s*([\d/]{2,10}|[\d]{1,2}\s+de\s+\w+\s+de\s+[\d]{4})'
     match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
-    fecha = match_fecha.group(1).strip() if match_fecha else "No encontrada"
+    fecha = match_fecha.group(1) if match_fecha else "No encontrada"
 
-    # 3b. Días (Ajustado para capturar "(28 días)" o "Días de consumo: 23")
-    patron_dias = r'(?:Días\s+de\s+consumo:|Periodo\s+de\s+consumo:.*?|\()(\d+)\s*días'
+    # Se añade soporte para el formato "(XX días)"
+    patron_dias = r'(?:Días\s+de\s+consumo:|Periodo\s+de\s+consumo:.*?|\()(\d+)\s*(?:días|dias)'
     match_dias = re.search(patron_dias, texto_completo, re.IGNORECASE | re.DOTALL)
     if not match_dias:
         match_dias = re.search(r'(\d+)\s*días', texto_completo, re.IGNORECASE)
