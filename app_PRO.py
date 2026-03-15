@@ -12,7 +12,7 @@ def extraer_datos_factura(pdf_path):
         for pagina in pdf.pages:
             texto_completo += pagina.extract_text() + "\n"
 
-    # 1. Búsqueda de Consumos
+    # 1. Búsqueda de Consumos (Soporte universal)
     patrones_consumo = {
         'punta': [
             r'Consumo\s+kWh\s+([\d,.]+)\s+[\d,.]+\s+[\d,.]+', 
@@ -43,20 +43,23 @@ def extraer_datos_factura(pdf_path):
                 consumos[tramo] = float(match.group(1).replace(',', '.'))
                 break
 
-    # 2. Búsqueda de Potencia (Mejorado para Energía XXI y otros)
-    # Captura valores como "4,600" tras "Potencia contratada"
+    # 2. Búsqueda de Potencia (Ajustado para El Corte Inglés y Energía XXI)
+    # Añadido patrón para "Potencia contratada X,XXX kW" sin dos puntos
     patron_potencia = r'(?:Potencia:?\s*Punta:?|Potencia\s+contratada\s+kW|Potencia\s+contratada|Potencia\s+P1:?)[\s\n]*([\d,.]+)'
     match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
     potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
 
-    # 3. Fecha (Mejorado para Energía XXI: "emitida el 18 de febrero de 2026")
-    patron_fecha = r'(?:Fecha\s+de\s+emisión:|emitida\s+el|Fecha\s+de\s+Factura:)\s*([\d]{1,2}\s*(?:de\s+\w+\s+de\s+)?[\d/]{2,10})'
+    # 3. Fecha y Días (Ajuste para "Días de consumo:")
+    patron_fecha = r'(?:Fecha\s+de\s+emisión:|emitida\s+el|Fecha\s+de\s+Factura:)\s*([\d/]+)'
     match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
-    fecha = match_fecha.group(1).strip() if match_fecha else "No encontrada"
+    fecha = match_fecha.group(1) if match_fecha else "No encontrada"
 
-    # 3b. Días (Mejorado para "(28 días)")
-    patron_dias = r'(?:Días\s+de\s+consumo:|Periodo\s+de\s+consumo:.*?|\()(\d+)\s*días'
+    # Buscamos específicamente "Días de consumo:" para ECI o el formato estándar
+    patron_dias = r'(?:Días\s+de\s+consumo:|Periodo\s+de\s+consumo:.*?)\s*(\d+)'
     match_dias = re.search(patron_dias, texto_completo, re.IGNORECASE | re.DOTALL)
+    if not match_dias:
+        match_dias = re.search(r'(\d+)\s*días', texto_completo, re.IGNORECASE)
+    
     dias = int(match_dias.group(1)) if match_dias else 0
 
     # 4. Excedentes
