@@ -5,67 +5,6 @@ import pandas as pd
 import streamlit as st
 import io
 import os
-from fpdf import FPDF  # Nueva librería para el PDF
-
-def generar_pdf(df_factura, df_comparativa):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    
-    # Título
-    pdf.cell(190, 10, "Informe de Comparativa Energetica", ln=True, align='C')
-    pdf.ln(10)
-    
-    # 1. Datos Extraídos de la Factura
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(190, 10, "1. Datos de la Factura Original", ln=True)
-    pdf.set_font("Arial", '', 10)
-    
-    for col in df_factura.columns:
-        if col != 'Archivo':
-            valor = str(df_factura.iloc[0][col])
-            pdf.cell(95, 8, f"{col}:", border=1)
-            pdf.cell(95, 8, f"{valor}", border=1, ln=True)
-    
-    pdf.ln(10)
-    
-    # 2. Resumen de Ahorro
-    mejor_opcion = df_comparativa[df_comparativa["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"].iloc[0]
-    ahorro_mensual = mejor_opcion['Ahorro']
-    ahorro_anual = ahorro_mensual * 12
-
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(190, 10, "2. Estimacion de Ahorro Anual", ln=True)
-    pdf.set_font("Arial", '', 11)
-    
-    if ahorro_mensual > 0:
-        pdf.set_text_color(0, 128, 0) # Verde
-        texto_ahorro = f"Cambiando a {mejor_opcion['Compañía/Tarifa']} podrías ahorrar {ahorro_anual:.2f} euros al año."
-    else:
-        pdf.set_text_color(0, 0, 0)
-        texto_ahorro = "Tu tarifa actual es la más competitiva. No se estima ahorro anual."
-        
-    pdf.multi_cell(190, 10, texto_ahorro)
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln(5)
-
-    # 3. Tabla Comparativa (Top 5)
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(190, 10, "3. Comparativa de Mercado (Top 5 opciones)", ln=True)
-    pdf.set_font("Arial", 'B', 9)
-    
-    # Cabeceras
-    pdf.cell(80, 8, "Compania/Tarifa", border=1)
-    pdf.cell(55, 8, "Coste Periodo", border=1)
-    pdf.cell(55, 8, "Ahorro", border=1, ln=True)
-    
-    pdf.set_font("Arial", '', 9)
-    for i, row in df_comparativa.head(6).iterrows():
-        pdf.cell(80, 8, str(row['Compañía/Tarifa'])[:40], border=1)
-        pdf.cell(55, 8, f"{row['Coste (€)']} EUR", border=1)
-        pdf.cell(55, 8, f"{row['Ahorro']} EUR", border=1, ln=True)
-
-    return pdf.output(dest='S').encode('latin-1', errors='replace')
 
 def extraer_datos_factura(pdf_path):
     texto_completo = ""
@@ -73,36 +12,50 @@ def extraer_datos_factura(pdf_path):
         for pagina in pdf.pages:
             texto_completo += pagina.extract_text() + "\n"
 
-    # --- Lógica de extracción (Sin cambios) ---
+    # --- DETECCIÓN DE TIPO DE FACTURA ---
     es_el_corte_ingles = re.search(r'Energía\s+El\s+Corte\s+Inglés|TELECOR', texto_completo, re.IGNORECASE)
 
     if es_el_corte_ingles:
+        # 1. Búsqueda de Consumos (El Corte Inglés) 
+        # Se busca el valor numérico en la tabla de "Energía consumida"
         patron_cons_eci = r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)'
         match_cons = re.search(patron_cons_eci, texto_completo)
+        
         consumos = {
             'punta': float(match_cons.group(1).replace(',', '.')) if match_cons else 0.0,
             'llano': float(match_cons.group(2).replace(',', '.')) if match_cons else 0.0,
             'valle': float(match_cons.group(3).replace(',', '.')) if match_cons else 0.0
         }
+
+        # 2. Búsqueda de Potencia (El Corte Inglés) [cite: 74, 87]
         patron_potencia = r'Potencia\s+contratada\s+kW\s+([\d,.]+)'
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
+
+        # 3. Fecha y Días (El Corte Inglés) 
         patron_fecha = r'Fecha\s+de\s+Factura:\s*([\d/]+)'
         match_fecha = re.search(patron_fecha, texto_completo)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
+
         patron_dias = r'Días\s+de\s+consumo:\s*(\d+)'
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
+
+        # 4. Total Factura (El Corte Inglés) 
         patron_total = r'TOTAL\s+FACTURA\s+([\d,.]+)\s*€'
         match_total = re.search(patron_total, texto_completo)
         total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
-        excedente = 0.0 
+        
+        excedente = 0.0 # No se visualizan excedentes en este modelo de factura
+
     else:
+        # --- LÓGICA ORIGINAL PARA OTROS FORMATOS ---
         patrones_consumo = {
             'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh'],
             'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh'],
             'valle': [r'Consumo\s+en\s+P3:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh']
         }
+        
         consumos = {}
         for tramo, patrones in patrones_consumo.items():
             consumos[tramo] = 0.0
@@ -111,18 +64,23 @@ def extraer_datos_factura(pdf_path):
                 if match:
                     consumos[tramo] = float(match.group(1).replace(',', '.'))
                     break
+
         patron_potencia = r'(?:Potencia\s+contratada(?:\s+en\s+punta-llano|\s+P1)?):\s*([\d,.]+)\s*kW'
         match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
+
         patron_fecha = r'(?:emitida\s+el|Fecha\s+de\s+emisión:)\s*([\d/]+\s*(?:de\s+\w+\s+de\s+)?\d{2,4})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
+
         patron_dias = r'(\d+)\s*días'
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
+
         patron_excedente = r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh'
         match_excedente = re.search(patron_excedente, texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
+        
         es_xxi = re.search(r'Comercializadora\s+de\s+Referencia\s+Energética\s+por\s+XXI|Energía\s+XXI', texto_completo, re.IGNORECASE)
         if es_xxi:
             m_pot = re.search(r'por\s+potencia\s+contratada\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
@@ -139,6 +97,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": total_real
     }
 
+# --- RESTO DEL CÓDIGO STREAMLIT PERMANECE IGUAL ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
@@ -161,6 +120,9 @@ else:
 
         if datos_facturas:
             df_resumen_pdfs = pd.DataFrame(datos_facturas)
+            with st.expander("🔍 Ver detalles de datos extraídos"):
+                st.dataframe(df_resumen_pdfs, use_container_width=True)
+
             df_tarifas = pd.read_excel(excel_path)
             resultados_finales = []
 
@@ -201,27 +163,27 @@ else:
             df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
             df_comp = df_comp.sort_values(by=["Mes/Fecha", "Coste (€)"], ascending=[True, True])
 
-            # Mostrar resultados en App
             st.subheader("📊 Comparativa de Mercado")
-            st.dataframe(df_comp, use_container_width=True, hide_index=True)
+            st.dataframe(
+                df_comp,
+                column_config={
+                    "Mes/Fecha": "📅 Período",
+                    "Compañía/Tarifa": "🏢 Proveedor / Opción",
+                    "Coste (€)": st.column_config.ProgressColumn(
+                        "Coste Mensual", format="%.2f €", min_value=0,
+                        max_value=float(df_comp["Coste (€)"].max()),
+                    ),
+                    "Ahorro": st.column_config.NumberColumn(
+                        "Diferencia vs Actual", format="%.2f €",
+                        help="Valores positivos indican cuánto dinero ahorrarías."
+                    )
+                },
+                hide_index=True,
+                use_container_width=True
+            )
 
             mejor = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"].iloc[0]
-            
-            # --- SECCIÓN DE EXPORTACIÓN PDF ---
-            st.divider()
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                if mejor["Ahorro"] > 0:
-                    st.success(f"💡 **Ahorro Estimado:** {mejor['Ahorro'] * 12:.2f} € al año con {mejor['Compañía/Tarifa']}")
-                else:
-                    st.info("✅ Estás en la mejor tarifa posible.")
-
-            with col2:
-                # Botón para descargar PDF
-                pdf_bytes = generar_pdf(df_resumen_pdfs, df_comp)
-                st.download_button(
-                    label="📥 Descargar Resumen PDF",
-                    data=pdf_bytes,
-                    file_name="comparativa_energia.pdf",
-                    mime="application/pdf"
-                )
+            if mejor["Ahorro"] > 0:
+                st.success(f"💡 **Oportunidad de Ahorro:** Cambiándote a **{mejor['Compañía/Tarifa']}** podrías ahorrar **{mejor['Ahorro']} €** en este recibo.")
+            else:
+                st.info("✅ Tu tarifa actual parece ser la más competitiva por ahora.")
