@@ -12,23 +12,22 @@ def extraer_datos_factura(pdf_path):
         for pagina in pdf.pages:
             texto_completo += pagina.extract_text() + "\n"
 
-    # 1. Búsqueda de Consumos (Ajustado para capturar decimales exactos de la tabla)
+    # 1. Búsqueda de Consumos (Específico para la tabla de El Corte Inglés)
     patrones_consumo = {
         'punta': [
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)', 
-            r'Consumo\s+kWh\s+([\d,.]+)\s+[\d,.]+\s+[\d,.]+',
+            r'Consumo\s+kWh\s+([\d,.]+)\s+[\d,.]+\s+[\d,.]+', # Tabla detalle página 2 [cite: 98]
             r'Consumo\s+en\s+P1:?\s*([\d,.]+)',
-            r'Punta\s*\n\s*([\d,.]+)\s+kWh' # Formato vertical
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)' # Tabla resumen página 1 [cite: 11]
         ],
         'llano': [
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+([\d,.]+)',
-            r'Consumo\s+kWh\s+[\d,.]+\s+([\d,.]+)\s+[\d,.]+',
-            r'Consumo\s+en\s+P2:?\s*([\d,.]+)'
+            r'Consumo\s+kWh\s+[\d,.]+\s+([\d,.]+)\s+[\d,.]+', # Tabla detalle página 2 [cite: 99]
+            r'Consumo\s+en\s+P2:?\s*([\d,.]+)',
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+([\d,.]+)' # Tabla resumen página 1 [cite: 11]
         ],
         'valle': [
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+[\d,.]+\s+([\d,.]+)',
-            r'Consumo\s+kWh\s+[\d,.]+\s+[\d,.]+\s+([\d,.]+)',
-            r'Consumo\s+en\s+P3:?\s*([\d,.]+)'
+            r'Consumo\s+kWh\s+[\d,.]+\s+[\d,.]+\s+([\d,.]+)', # Tabla detalle página 2 [cite: 100]
+            r'Consumo\s+en\s+P3:?\s*([\d,.]+)',
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+[\d,.]+\s+([\d,.]+)' # Tabla resumen página 1 [cite: 11]
         ]
     }
     
@@ -41,33 +40,33 @@ def extraer_datos_factura(pdf_path):
                 consumos[tramo] = float(match.group(1).replace(',', '.'))
                 break
 
-    # 2. Búsqueda de Potencia (Corregido para El Corte Inglés)
-    # Busca el valor numérico que sigue a "Punta:" en la sección de potencia o en la tabla de precios
-    patron_potencia = r'(?:Potencia(?:\s+contratada\s+kW)?\s*(?:Punta:?)?\s*)\s*([\d,.]+)\s*kW'
+    # 2. Búsqueda de Potencia (Ajustado para capturar 3,45 kW en Punta [cite: 8, 74])
+    # Busca "Potencia:" seguido de "Punta: X kW" o la fila de la tabla "Potencia contratada kW"
+    patron_potencia = r'Potencia:\s*Punta:\s*([\d,.]+)\s*kW|Potencia\s+contratada\s+kW\s+([\d,.]+)'
     match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
-    potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
+    
+    if match_potencia:
+        val_pot = match_potencia.group(1) if match_potencia.group(1) else match_potencia.group(2)
+        potencia = float(val_pot.replace(',', '.'))
+    else:
+        potencia = 0.0
 
-    # 3. Fecha y Días (Corregido: captura "Fecha de Factura:" o "emitida el")
-    patron_fecha = r'(?:Fecha\s+de\s+Factura:?|emitida\s+el|Fecha\s+de\s+emisión:?)\s*([\d/]+)'
+    # 3. Fecha y Días (Captura 16/01/2025  y 23 días )
+    patron_fecha = r'Fecha\s+de\s+Factura:\s*([\d/]+)'
     match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
     fecha = match_fecha.group(1) if match_fecha else "No encontrada"
 
-    patron_dias = r'(?:Días\s+de\s+consumo:?|(\d+)\s*días)'
+    patron_dias = r'Días\s+de\s+consumo:\s*(\d+)'
     match_dias = re.search(patron_dias, texto_completo, re.IGNORECASE)
-    if match_dias:
-        dias = int(match_dias.group(1)) if match_dias.group(1) else int(re.search(r'(\d+)', match_dias.group(0)).group(1))
-    else:
-        dias = 0
+    dias = int(match_dias.group(1)) if match_dias else 0
 
     # 4. Excedentes
     patron_excedente = r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh'
     match_excedente = re.search(patron_excedente, texto_completo, re.IGNORECASE)
     excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
     
-    # --- Lógica de Total Real ---
-    total_real = 0.0
-    # Caso El Corte Inglés: Busca "TOTAL FACTURA" y el valor con €
-    patron_total = r'(?:TOTAL\s+FACTURA|Importe\s+total)\s*:?\s*([\d,.]+)\s*€'
+    # 5. Total Real (Captura 21,34€ [cite: 4, 129])
+    patron_total = r'TOTAL\s+FACTURA\s*([\d,.]+)\s*€'
     match_total = re.search(patron_total, texto_completo, re.IGNORECASE)
     total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
@@ -78,7 +77,8 @@ def extraer_datos_factura(pdf_path):
         "Total Real": total_real
     }
 
-# --- EL RESTO DEL CÓDIGO (INTERFAZ Y LÓGICA) SIGUE EXACTAMENTE IGUAL ---
+# --- EL RESTO DEL CÓDIGO PERMANECE EXACTAMENTE IGUAL ---
+# (Se mantiene toda la lógica de Streamlit, carga de Excel y cálculos comparativos)
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
