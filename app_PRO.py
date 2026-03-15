@@ -43,23 +43,19 @@ def extraer_datos_factura(pdf_path):
                 consumos[tramo] = float(match.group(1).replace(',', '.'))
                 break
 
-    # 2. Búsqueda de Potencia (Ajustado para El Corte Inglés y Energía XXI)
-    # Añadido patrón para "Potencia contratada X,XXX kW" sin dos puntos
+    # 2. Búsqueda de Potencia (Mejorado para detectar 4,600 en Energía XXI)
     patron_potencia = r'(?:Potencia:?\s*Punta:?|Potencia\s+contratada\s+kW|Potencia\s+contratada|Potencia\s+P1:?)[\s\n]*([\d,.]+)'
     match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
     potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
 
-    # 3. Fecha y Días (Ajuste para "Días de consumo:")
-    patron_fecha = r'(?:Fecha\s+de\s+emisión:|emitida\s+el|Fecha\s+de\s+Factura:)\s*([\d/]+)'
+    # 3. Fecha (Mejorado para "emitida el 18 de febrero de 2026")
+    patron_fecha = r'(?:Fecha\s+de\s+emisión:|emitida\s+el|Fecha\s+de\s+Factura:)\s*([\d]{1,2}\s*(?:de\s+\w+\s+de\s+)?[\d/]{2,10})'
     match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
-    fecha = match_fecha.group(1) if match_fecha else "No encontrada"
+    fecha = match_fecha.group(1).strip() if match_fecha else "No encontrada"
 
-    # Buscamos específicamente "Días de consumo:" para ECI o el formato estándar
-    patron_dias = r'(?:Días\s+de\s+consumo:|Periodo\s+de\s+consumo:.*?)\s*(\d+)'
+    # 3b. Días (Mejorado para "(28 días)" y "Días de consumo: 23")
+    patron_dias = r'(?:Días\s+de\s+consumo:|Periodo\s+de\s+consumo:.*?|\()(\d+)\s*días'
     match_dias = re.search(patron_dias, texto_completo, re.IGNORECASE | re.DOTALL)
-    if not match_dias:
-        match_dias = re.search(r'(\d+)\s*días', texto_completo, re.IGNORECASE)
-    
     dias = int(match_dias.group(1)) if match_dias else 0
 
     # 4. Excedentes
@@ -87,7 +83,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": total_real
     }
 
-# --- EL RESTO DEL CÓDIGO PERMANECE IGUAL ---
+# --- EL RESTO DEL CÓDIGO SE MANTIENE EXACTAMENTE IGUAL ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
