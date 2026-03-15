@@ -49,28 +49,29 @@ def generar_reporte_pdf(df_resumen, mejor_opcion, df_tarifas):
 
     return pdf.output(dest='S').encode('latin-1')
 
-# --- TU CÓDIGO DE EXTRACCIÓN (SE MANTIENE IGUAL) ---
+# --- TU CÓDIGO DE EXTRACCIÓN (MODIFICADO PARA EL CORTE INGLÉS) ---
 def extraer_datos_factura(pdf_path):
     texto_completo = ""
     with pdfplumber.open(pdf_path) as pdf:
         for pagina in pdf.pages:
             texto_completo += pagina.extract_text() + "\n"
-    
+            
+    # Patrones adaptados para detectar la tabla de consumos de El Corte Inglés [cite: 11, 29, 31]
     patrones_consumo = {
         'punta': [
             r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', 
             r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh',
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)'
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)' # Nueva regla para ECI [cite: 11, 97, 114]
         ],
         'llano': [
             r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', 
             r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh',
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+([\d,.]+)'
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+([\d,.]+)' # Nueva regla para ECI [cite: 11, 99, 116]
         ],
         'valle': [
             r'Consumo\s+en\s+P3:?\s*([\d,.]+)\s*kWh', 
             r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh',
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+[\d,.]+\s+([\d,.]+)'
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+[\d,.]+\s+([\d,.]+)' # Nueva regla para ECI [cite: 11, 100, 120]
         ]
     }
     
@@ -82,7 +83,8 @@ def extraer_datos_factura(pdf_path):
             if match:
                 consumos[tramo] = float(match.group(1).replace(',', '.'))
                 break
-                
+    
+    # Adaptación de potencia para detectar "Potencia: Punta: X kW Valle: X kW" [cite: 8, 69, 81]
     patron_potencia = r'(?:Potencia\s+contratada(?:\s+en\s+punta-llano|\s+P1)?|Potencia:)\s*(?:Punta:?\s*)?([\d,.]+)\s*kW'
     match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
     potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
