@@ -15,8 +15,6 @@ def extraer_datos_factura(pdf_path):
     es_el_corte_ingles = re.search(r'Energía\s+El\s+Corte\s+Inglés|TELECOR', texto_completo, re.IGNORECASE)
 
     if es_el_corte_ingles:
-        # 1. Búsqueda de Consumos (El Corte Inglés) 
-        # Se busca el valor numérico en la tabla de "Energía consumida"
         patron_cons_eci = r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)'
         match_cons = re.search(patron_cons_eci, texto_completo)
         
@@ -26,12 +24,10 @@ def extraer_datos_factura(pdf_path):
             'valle': float(match_cons.group(3).replace(',', '.')) if match_cons else 0.0
         }
 
-        # 2. Búsqueda de Potencia (El Corte Inglés)
         patron_potencia = r'Potencia\s+contratada\s+kW\s+([\d,.]+)'
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
 
-        # 3. Fecha y Días (El Corte Inglés) 
         patron_fecha = r'Fecha\s+de\s+Factura:\s*([\d/]+)'
         match_fecha = re.search(patron_fecha, texto_completo)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
@@ -40,15 +36,12 @@ def extraer_datos_factura(pdf_path):
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
 
-        # 4. Total Factura (El Corte Inglés) 
         patron_total = r'TOTAL\s+FACTURA\s+([\d,.]+)\s*€'
         match_total = re.search(patron_total, texto_completo)
         total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
-        
-        excedente = 0.0 # No se visualizan excedentes en este modelo de factura
+        excedente = 0.0 
 
     else:
-        # --- LÓGICA ORIGINAL PARA OTROS FORMATOS ---
         patrones_consumo = {
             'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh'],
             'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh'],
@@ -129,7 +122,8 @@ else:
                     "Mes/Fecha": fact['Fecha'],
                     "Compañía/Tarifa": "📍 TU FACTURA ACTUAL",
                     "Coste (€)": fact['Total Real'],
-                    "Ahorro": 0.0
+                    "Ahorro": 0.0,
+                    "Dias_Factura": fact['Días']
                 })
 
                 for index, tarifa in df_tarifas.iterrows():
@@ -163,42 +157,42 @@ else:
             df_comp = df_comp.sort_values(by=["Mes/Fecha", "Coste (€)"], ascending=[True, True])
 
             # --- TABLA COMPARATIVA CON LÓGICA DE COLORES ---
-st.subheader("📊 Comparativa de Mercado")
+            st.subheader("📊 Comparativa de Mercado")
 
-# Creamos una columna visual de estado para que el usuario vea el color rápido
-df_comp["Estado"] = df_comp["Ahorro"].apply(lambda x: "🟢 Ahorro" if x > 0 else ("⚪ Actual" if x == 0 else "🔴 Más caro"))
+            # Nueva columna de Estado con semáforos para identificar ahorro rápido
+            df_comp["Estado"] = df_comp["Ahorro"].apply(
+                lambda x: "🟢 Ahorro" if x > 0.01 else ("⚪ Actual" if abs(x) <= 0.01 else "🔴 Más caro")
+            )
 
-st.dataframe(
-    df_comp.drop(columns=['Dias_Factura'], errors='ignore'),
-    column_config={
-        "Mes/Fecha": "📅 Período",
-        "Compañía/Tarifa": "🏢 Proveedor / Opción",
-        "Estado": st.column_config.TextColumn("Situación"), # Nueva columna visual
-        "Coste (€)": st.column_config.ProgressColumn(
-            "Coste Mensual", 
-            format="%.2f €", 
-            min_value=0,
-            max_value=float(df_comp["Coste (€)"].max()),
-            # Nota: El color aquí es global, por eso usamos la columna 'Estado' para el semáforo
-        ),
-        "Ahorro": st.column_config.NumberColumn(
-            "Diferencia vs Actual", 
-            format="%.2f €",
-            help="Verde = Ahorras dinero | Rojo = Pagarías más"
-        )
-    },
-    hide_index=True,
-    use_container_width=True
-)
+            st.dataframe(
+                df_comp.drop(columns=['Dias_Factura'], errors='ignore'),
+                column_config={
+                    "Mes/Fecha": "📅 Período",
+                    "Compañía/Tarifa": "🏢 Proveedor / Opción",
+                    "Estado": st.column_config.TextColumn("Situación"),
+                    "Coste (€)": st.column_config.ProgressColumn(
+                        "Coste Mensual", 
+                        format="%.2f €", 
+                        min_value=0,
+                        max_value=float(df_comp["Coste (€)"].max()),
+                    ),
+                    "Ahorro": st.column_config.NumberColumn(
+                        "Diferencia vs Actual", 
+                        format="%.2f €",
+                        help="Verde = Ahorras dinero | Rojo = Pagarías más"
+                    )
+                },
+                hide_index=True,
+                use_container_width=True
             )
 
             # --- LÓGICA DE ESTIMACIÓN ANUAL ---
-            mejor = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"].iloc[0]
-            if mejor["Ahorro"] > 0:
-                # Calculamos el ahorro anual proyectado: (Ahorro / Días Factura) * 365
-                ahorro_anual = (mejor["Ahorro"] / mejor["Dias_Factura"]) * 365 if mejor["Dias_Factura"] > 0 else 0
-                
-                st.success(f"💡 **Oportunidad de Ahorro:** Cambiándote a **{mejor['Compañía/Tarifa']}** ahorrarías **{mejor['Ahorro']} €** en este recibo.")
-                st.metric(label="Estimado de Ahorro Anual", value=f"{round(ahorro_anual, 2)} €")
-            else:
-                st.info("✅ Tu tarifa actual parece ser la más competitiva por ahora.")
+            mejor_df = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"]
+            if not mejor_df.empty:
+                mejor = mejor_df.iloc[0]
+                if mejor["Ahorro"] > 0:
+                    ahorro_anual = (mejor["Ahorro"] / mejor["Dias_Factura"]) * 365 if mejor["Dias_Factura"] > 0 else 0
+                    st.success(f"💡 **Oportunidad de Ahorro:** Cambiándote a **{mejor['Compañía/Tarifa']}** ahorrarías **{mejor['Ahorro']} €** en este recibo.")
+                    st.metric(label="Estimado de Ahorro Anual", value=f"{round(ahorro_anual, 2)} €")
+                else:
+                    st.info("✅ Tu tarifa actual parece ser la más competitiva por ahora.")
