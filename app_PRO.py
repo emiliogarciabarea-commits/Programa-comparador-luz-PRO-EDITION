@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 import io
 import os
+import base64
 
 def extraer_datos_factura(pdf_path):
     texto_completo = ""
@@ -16,8 +17,7 @@ def extraer_datos_factura(pdf_path):
     es_el_corte_ingles = re.search(r'Energía\s+El\s+Corte\s+Inglés|TELECOR', texto_completo, re.IGNORECASE)
 
     if es_el_corte_ingles:
-        # 1. Búsqueda de Consumos (El Corte Inglés) 
-        # Se busca el valor numérico en la tabla de "Energía consumida"
+        # 1. Búsqueda de Consumos (El Corte Inglés)
         patron_cons_eci = r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)'
         match_cons = re.search(patron_cons_eci, texto_completo)
         
@@ -27,12 +27,12 @@ def extraer_datos_factura(pdf_path):
             'valle': float(match_cons.group(3).replace(',', '.')) if match_cons else 0.0
         }
 
-        # 2. Búsqueda de Potencia (El Corte Inglés) [cite: 74, 87]
+        # 2. Búsqueda de Potencia (El Corte Inglés)
         patron_potencia = r'Potencia\s+contratada\s+kW\s+([\d,.]+)'
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
 
-        # 3. Fecha y Días (El Corte Inglés) 
+        # 3. Fecha y Días (El Corte Inglés)
         patron_fecha = r'Fecha\s+de\s+Factura:\s*([\d/]+)'
         match_fecha = re.search(patron_fecha, texto_completo)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
@@ -41,12 +41,12 @@ def extraer_datos_factura(pdf_path):
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
 
-        # 4. Total Factura (El Corte Inglés) 
+        # 4. Total Factura (El Corte Inglés)
         patron_total = r'TOTAL\s+FACTURA\s+([\d,.]+)\s*€'
         match_total = re.search(patron_total, texto_completo)
         total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
         
-        excedente = 0.0 # No se visualizan excedentes en este modelo de factura
+        excedente = 0.0
 
     else:
         # --- LÓGICA ORIGINAL PARA OTROS FORMATOS ---
@@ -97,7 +97,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": total_real
     }
 
-# --- RESTO DEL CÓDIGO STREAMLIT PERMANECE IGUAL ---
+# --- INTERFAZ STREAMLIT ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
@@ -110,80 +110,77 @@ else:
 
     if uploaded_files:
         datos_facturas = []
+        
+        # --- NUEVA SECCIÓN: VISUALIZADOR DE PDF ---
+        col_pdf, col_data = st.columns([1, 1])
+        
         for uploaded_file in uploaded_files:
+            file_bytes = uploaded_file.read() # Leer bytes una vez
+            
+            with col_pdf:
+                with st.expander(f"📄 Ver Factura: {uploaded_file.name}", expanded=True):
+                    base64_pdf = base64.b64encode(file_bytes).decode('utf-8')
+                    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
+                    st.markdown(pdf_display, unsafe_allow_html=True)
+
             try:
-                res = extraer_datos_factura(io.BytesIO(uploaded_file.read()))
+                # Procesar usando los bytes ya leídos
+                res = extraer_datos_factura(io.BytesIO(file_bytes))
                 res['Archivo'] = uploaded_file.name
                 datos_facturas.append(res)
             except Exception as e:
                 st.error(f"Error procesando {uploaded_file.name}: {e}")
 
         if datos_facturas:
-            df_resumen_pdfs = pd.DataFrame(datos_facturas)
-            with st.expander("🔍 Ver detalles de datos extraídos"):
+            with col_data:
+                df_resumen_pdfs = pd.DataFrame(datos_facturas)
+                st.subheader("📝 Datos Extraídos")
                 st.dataframe(df_resumen_pdfs, use_container_width=True)
 
-            df_tarifas = pd.read_excel(excel_path)
-            resultados_finales = []
+                # --- Lógica de Comparativa ---
+                df_tarifas = pd.read_excel(excel_path)
+                resultados_finales = []
 
-            for _, fact in df_resumen_pdfs.iterrows():
-                resultados_finales.append({
-                    "Mes/Fecha": fact['Fecha'],
-                    "Compañía/Tarifa": "📍 TU FACTURA ACTUAL",
-                    "Coste (€)": fact['Total Real'],
-                    "Ahorro": 0.0
-                })
+                for _, fact in df_resumen_pdfs.iterrows():
+                    resultados_finales.append({
+                        "Mes/Fecha": fact['Fecha'],
+                        "Compañía/Tarifa": "📍 TU FACTURA ACTUAL",
+                        "Coste (€)": fact['Total Real'],
+                        "Ahorro": 0.0
+                    })
 
-                for index, tarifa in df_tarifas.iterrows():
-                    try:
-                        nombre_cia = tarifa.iloc[0]
-                        b_pot1 = pd.to_numeric(tarifa.iloc[1], errors='coerce')
-                        c_pot2 = pd.to_numeric(tarifa.iloc[2], errors='coerce')
-                        d_punta = pd.to_numeric(tarifa.iloc[3], errors='coerce')
-                        e_llano = pd.to_numeric(tarifa.iloc[4], errors='coerce')
-                        f_valle = pd.to_numeric(tarifa.iloc[5], errors='coerce')
-                        g_excedente = pd.to_numeric(tarifa.iloc[6], errors='coerce')
+                    for index, tarifa in df_tarifas.iterrows():
+                        try:
+                            nombre_cia = tarifa.iloc[0]
+                            b_pot1 = pd.to_numeric(tarifa.iloc[1], errors='coerce')
+                            c_pot2 = pd.to_numeric(tarifa.iloc[2], errors='coerce')
+                            d_punta = pd.to_numeric(tarifa.iloc[3], errors='coerce')
+                            e_llano = pd.to_numeric(tarifa.iloc[4], errors='coerce')
+                            f_valle = pd.to_numeric(tarifa.iloc[5], errors='coerce')
+                            g_excedente = pd.to_numeric(tarifa.iloc[6], errors='coerce')
 
-                        coste_estimado = (fact['Días'] * b_pot1 * fact['Potencia (kW)']) + \
-                                         (fact['Días'] * c_pot2 * fact['Potencia (kW)']) + \
-                                         (fact['Consumo Punta (kWh)'] * d_punta) + \
-                                         (fact['Consumo Llano (kWh)'] * e_llano) + \
-                                         (fact['Consumo Valle (kWh)'] * f_valle) - \
-                                         (fact['Excedente (kWh)'] * g_excedente)
-                        
-                        ahorro = fact['Total Real'] - coste_estimado
-                        resultados_finales.append({
-                            "Mes/Fecha": fact['Fecha'],
-                            "Compañía/Tarifa": nombre_cia,
-                            "Coste (€)": round(coste_estimado, 2),
-                            "Ahorro": round(ahorro, 2)
-                        })
-                    except: continue
+                            coste_estimado = (fact['Días'] * b_pot1 * fact['Potencia (kW)']) + \
+                                             (fact['Días'] * c_pot2 * fact['Potencia (kW)']) + \
+                                             (fact['Consumo Punta (kWh)'] * d_punta) + \
+                                             (fact['Consumo Llano (kWh)'] * e_llano) + \
+                                             (fact['Consumo Valle (kWh)'] * f_valle) - \
+                                             (fact['Excedente (kWh)'] * g_excedente)
+                            
+                            ahorro = fact['Total Real'] - coste_estimado
+                            resultados_finales.append({
+                                "Mes/Fecha": fact['Fecha'],
+                                "Compañía/Tarifa": nombre_cia,
+                                "Coste (€)": round(coste_estimado, 2),
+                                "Ahorro": round(ahorro, 2)
+                            })
+                        except: continue
 
-            df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
-            df_comp = df_comp.sort_values(by=["Mes/Fecha", "Coste (€)"], ascending=[True, True])
+                df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
+                df_comp = df_comp.sort_values(by=["Mes/Fecha", "Coste (€)"], ascending=[True, True])
 
-            st.subheader("📊 Comparativa de Mercado")
-            st.dataframe(
-                df_comp,
-                column_config={
-                    "Mes/Fecha": "📅 Período",
-                    "Compañía/Tarifa": "🏢 Proveedor / Opción",
-                    "Coste (€)": st.column_config.ProgressColumn(
-                        "Coste Mensual", format="%.2f €", min_value=0,
-                        max_value=float(df_comp["Coste (€)"].max()),
-                    ),
-                    "Ahorro": st.column_config.NumberColumn(
-                        "Diferencia vs Actual", format="%.2f €",
-                        help="Valores positivos indican cuánto dinero ahorrarías."
-                    )
-                },
-                hide_index=True,
-                use_container_width=True
-            )
+                st.subheader("📊 Comparativa")
+                st.dataframe(df_comp, hide_index=True, use_container_width=True)
 
-            mejor = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"].iloc[0]
-            if mejor["Ahorro"] > 0:
-                st.success(f"💡 **Oportunidad de Ahorro:** Cambiándote a **{mejor['Compañía/Tarifa']}** podrías ahorrar **{mejor['Ahorro']} €** en este recibo.")
-            else:
-                st.info("✅ Tu tarifa actual parece ser la más competitiva por ahora.")
+                mejor = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"].iloc[0]
+                if mejor["Ahorro"] > 0:
+                    st.success(f"💡 Ahorra **{mejor['Ahorro']} €** con **{mejor['Compañía/Tarifa']}**")
