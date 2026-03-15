@@ -17,17 +17,17 @@ def extraer_datos_factura(pdf_path):
         'punta': [
             r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', 
             r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh',
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)' # Patrón Tabla ECI
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)' # Patrón para tabla ECI
         ],
         'llano': [
             r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', 
             r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh',
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+([\d,.]+)' # Patrón Tabla ECI
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+([\d,.]+)' # Patrón para tabla ECI
         ],
         'valle': [
             r'Consumo\s+en\s+P3:?\s*([\d,.]+)\s*kWh', 
             r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh',
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+[\d,.]+\s+([\d,.]+)' # Patrón Tabla ECI
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+[\d,.]+\s+([\d,.]+)' # Patrón para tabla ECI
         ]
     }
     
@@ -40,9 +40,9 @@ def extraer_datos_factura(pdf_path):
                 consumos[tramo] = float(match.group(1).replace(',', '.'))
                 break
 
-    # 2. Búsqueda de Potencia (Actualizado para El Corte Inglés)
-    # Busca "Potencia contratada kW" seguido del valor en la columna Punta
-    patron_potencia = r'(?:Potencia\s+contratada(?:\s+en\s+punta-llano|\s+P1)?|Potencia\s+contratada\s+kW):\s*(?:Punta\s*)?([\d,.]+)'
+    # 2. Búsqueda de Potencia (Actualizado para formato tabla ECI)
+    # Busca "Potencia contratada kW" y captura el primer valor numérico que le sigue (Punta)
+    patron_potencia = r'(?:Potencia\s+contratada(?:\s+en\s+punta-llano|\s+P1)?|Potencia\s+contratada\s+kW):\s*([\d,.]+)'
     match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
     potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
 
@@ -84,7 +84,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": total_real
     }
 
-# --- EL RESTO DEL CÓDIGO PERMANECE IGUAL ---
+# --- INTERFAZ STREAMLIT ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
@@ -115,6 +115,7 @@ else:
             resultados_finales = []
 
             for _, fact in df_resumen_pdfs.iterrows():
+                # Fila de control: Factura Actual
                 resultados_finales.append({
                     "Mes/Fecha": fact['Fecha'],
                     "Compañía/Tarifa": "📍 TU FACTURA ACTUAL",
@@ -149,11 +150,13 @@ else:
                         })
                     except: continue
 
+            # --- RENDERIZADO DE TABLA PROFESIONAL ---
             df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
             df_comp = df_comp.sort_values(by=["Mes/Fecha", "Coste (€)"], ascending=[True, True])
 
             st.subheader("📊 Comparativa de Mercado")
             
+            # Configuración de columnas
             st.dataframe(
                 df_comp,
                 column_config={
@@ -175,6 +178,7 @@ else:
                 use_container_width=True
             )
 
+            # Highlight de la mejor opción
             mejor = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"].iloc[0]
             if mejor["Ahorro"] > 0:
                 st.success(f"💡 **Oportunidad de Ahorro:** Cambiándote a **{mejor['Compañía/Tarifa']}** podrías ahorrar **{mejor['Ahorro']} €** en este recibo.")
