@@ -12,7 +12,7 @@ def extraer_datos_factura(pdf_path):
         for pagina in pdf.pages:
             texto_completo += pagina.extract_text() + "\n"
 
-    # 1. Búsqueda de Consumos (Soporte universal)
+    # 1. Búsqueda de Consumos (Universal)
     patrones_consumo = {
         'punta': [
             r'Consumo\s+kWh\s+([\d,.]+)\s+[\d,.]+\s+[\d,.]+', 
@@ -43,18 +43,28 @@ def extraer_datos_factura(pdf_path):
                 consumos[tramo] = float(match.group(1).replace(',', '.'))
                 break
 
-    # 2. Búsqueda de Potencia (Ajuste específico para El Corte Inglés)
-    # Busca "Punta:" seguido de un número, priorizando el contexto de potencia
-    patron_potencia = r'(?:Potencia:?\s*Punta:?|Potencia\s+contratada\s+kW|Potencia\s+P1:?)[\s\n]*([\d,.]+)'
+    # 2. Búsqueda de Potencia (Ajustado para Energía XXI, ECI y Naturgy)
+    # Regla 1: Formato tabla Energía XXI (Potencia kW x días)
+    # Regla 2: Formato estándar "Punta: X kW"
+    # Regla 3: Formato Naturgy/Otros "Potencia contratada P1: X kW"
+    patron_potencia = (
+        r'([\d,.]+)\s*kW\s*x\s*\d+\s*días|'  # Caso Energía XXI (Tabla)
+        r'Potencia:?\s*Punta:?[\s\n]*([\d,.]+)|' # Caso ECI
+        r'Potencia\s+contratada\s+P?1?[:\s]+([\d,.]+)\s*kW' # Caso Naturgy/General
+    )
+    
     match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
-    potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
+    potencia = 0.0
+    if match_potencia:
+        # Extraemos el primer grupo que no sea None
+        val_pot = next((g for g in match_potencia.groups() if g is not None), "0")
+        potencia = float(val_pot.replace(',', '.'))
 
-    # 3. Fecha y Días (Ajuste para "Días de consumo:")
-    patron_fecha = r'(?:Fecha\s+de\s+emisión:|emitida\s+el|Fecha\s+de\s+Factura:)\s*([\d/]+)'
+    # 3. Fecha y Días
+    patron_fecha = r'(?:Fecha\s+de\s+emisión:|emitida\s+el|Fecha\s+de\s+Factura:)\s*([\d/]+(?:\s+de\s+\w+\s+de\s+\d+)?|[\d/]+)'
     match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
     fecha = match_fecha.group(1) if match_fecha else "No encontrada"
 
-    # Buscamos específicamente "Días de consumo:" para ECI o el formato estándar
     patron_dias = r'(?:Días\s+de\s+consumo:|Periodo\s+de\s+consumo:.*?)\s*(\d+)'
     match_dias = re.search(patron_dias, texto_completo, re.IGNORECASE | re.DOTALL)
     if not match_dias:
@@ -69,16 +79,19 @@ def extraer_datos_factura(pdf_path):
     
     # 5. Total Real
     total_real = 0.0
-    es_xxi = re.search(r'Energía\s+XXI', texto_completo, re.IGNORECASE)
-    if es_xxi:
+    # Priorizar búsqueda de "TOTAL" para evitar sumas manuales si ya existe el dato
+    patron_total = r'(?:TOTAL\s+FACTURA|Importe\s+total|Total\s+a\s+pagar|Total\s+factura)\s*:?\s*([\d,.]+)\s*€'
+    match_total = re.search(patron_total, texto_completo, re.IGNORECASE)
+    
+    if match_total:
+        total_real = float(match_total.group(1).replace(',', '.'))
+    else:
+        # Si no lo encuentra (caso Energía XXI a veces), sumamos potencia y energía
         m_pot = re.search(r'por\s+potencia\s+contratada\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         m_ene = re.search(r'por\s+energía\s+consumida\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        total_real = (float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0) + \
-                     (float(m_ene.group(1).replace(',', '.')) if m_ene else 0.0)
-    else:
-        patron_total = r'(?:TOTAL\s+FACTURA|Importe\s+total|Total\s+a\s+pagar|Total\s+factura)\s*:?\s*([\d,.]+)\s*€'
-        match_total = re.search(patron_total, texto_completo, re.IGNORECASE)
-        total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
+        if m_pot or m_ene:
+            total_real = (float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0) + \
+                         (float(m_ene.group(1).replace(',', '.')) if m_ene else 0.0)
 
     return {
         "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
