@@ -197,27 +197,24 @@ else:
                 else:
                     st.info("✅ Tu tarifa actual parece ser la más competitiva por ahora.")
 
-# --- GENERACIÓN DE EXCEL COMPLETO ---
-st.divider()
+# --- GENERACIÓN DE EXCEL COMPLETO ----
+            st.divider()
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                # Hoja 1: Comparativa completa
+                # Pestaña 1
                 df_comp.to_excel(writer, index=False, sheet_name='Comparativa Mercado')
-                
-                # Hoja 2: Detalles extraídos del PDF
+                # Pestaña 2
                 df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Detalles Extraidos PDF')
-                
-                # Hoja 3: Resumen Ejecutivo
-                resumen_data = {
-                    "Concepto": ["Mejor Opción", "Ahorro Mensual", "Días Factura", "Ahorro Anual Estimado"],
+                # Pestaña 3
+                resumen_exec = {
+                    "Concepto": ["Mejor Opción", "Ahorro Mensual", "Ahorro Anual Estimado"],
                     "Valor": [
                         mejor['Compañía/Tarifa'] if not mejor_df.empty else "N/A",
                         f"{mejor['Ahorro']} €" if not mejor_df.empty else "0 €",
-                        mejor['Dias_Factura'] if not mejor_df.empty else 0,
                         f"{round(ahorro_anual_val, 2)} €"
                     ]
                 }
-                pd.DataFrame(resumen_data).to_excel(writer, index=False, sheet_name='Resumen Ahorro')
+                pd.DataFrame(resumen_exec).to_excel(writer, index=False, sheet_name='Resumen Ahorro')
 
             st.download_button(
                 label="📥 Descargar Informe Completo (Excel)",
