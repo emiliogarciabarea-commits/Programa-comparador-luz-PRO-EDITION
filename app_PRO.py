@@ -11,43 +11,35 @@ def extraer_datos_factura(pdf_path):
         for pagina in pdf.pages:
             texto_completo += pagina.extract_text() + "\n"
 
-    # --- DETECCIÓN DE TIPO DE FACTURA ---
     es_el_corte_ingles = re.search(r'Energía\s+El\s+Corte\s+Inglés|TELECOR', texto_completo, re.IGNORECASE)
 
     if es_el_corte_ingles:
         patron_cons_eci = r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)'
         match_cons = re.search(patron_cons_eci, texto_completo)
-        
         consumos = {
             'punta': float(match_cons.group(1).replace(',', '.')) if match_cons else 0.0,
             'llano': float(match_cons.group(2).replace(',', '.')) if match_cons else 0.0,
             'valle': float(match_cons.group(3).replace(',', '.')) if match_cons else 0.0
         }
-
         patron_potencia = r'Potencia\s+contratada\s+kW\s+([\d,.]+)'
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
-
         patron_fecha = r'Fecha\s+de\s+Factura:\s*([\d/]+)'
         match_fecha = re.search(patron_fecha, texto_completo)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
-
         patron_dias = r'Días\s+de\s+consumo:\s*(\d+)'
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
-
         patron_total = r'TOTAL\s+FACTURA\s+([\d,.]+)\s*€'
         match_total = re.search(patron_total, texto_completo)
         total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
         excedente = 0.0 
-
     else:
         patrones_consumo = {
             'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh'],
             'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh'],
             'valle': [r'Consumo\s+en\s+P3:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh']
         }
-        
         consumos = {}
         for tramo, patrones in patrones_consumo.items():
             consumos[tramo] = 0.0
@@ -56,19 +48,15 @@ def extraer_datos_factura(pdf_path):
                 if match:
                     consumos[tramo] = float(match.group(1).replace(',', '.'))
                     break
-
         patron_potencia = r'(?:Potencia\s+contratada(?:\s+en\s+punta-llano|\s+P1)?):\s*([\d,.]+)\s*kW'
         match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
-
         patron_fecha = r'(?:emitida\s+el|Fecha\s+de\s+emisión:)\s*([\d/]+\s*(?:de\s+\w+\s+de\s+)?\d{2,4})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
-
         patron_dias = r'(\d+)\s*días'
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
-
         patron_excedente = r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh'
         match_excedente = re.search(patron_excedente, texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
@@ -156,62 +144,51 @@ else:
             df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
             df_comp = df_comp.sort_values(by=["Mes/Fecha", "Coste (€)"], ascending=[True, True])
 
-            # --- TABLA COMPARATIVA ---
-            st.subheader("📊 Comparativa de Mercado")
+            st.subheader("📊 Comparativa de Mercado (Detalle por Factura)")
             df_comp["Estado"] = df_comp["Ahorro"].apply(
                 lambda x: "🟢 Ahorro" if x > 0.01 else ("⚪ Actual" if abs(x) <= 0.01 else "🔴 Más caro")
             )
 
-            st.dataframe(
-                df_comp.drop(columns=['Dias_Factura'], errors='ignore'),
-                column_config={
-                    "Mes/Fecha": "📅 Período",
-                    "Compañía/Tarifa": "🏢 Proveedor / Opción",
-                    "Estado": st.column_config.TextColumn("Situación"),
-                    "Coste (€)": st.column_config.ProgressColumn(
-                        "Coste Mensual", format="%.2f €", min_value=0,
-                        max_value=float(df_comp["Coste (€)"].max()),
-                    ),
-                    "Ahorro": st.column_config.NumberColumn("Diferencia vs Actual", format="%.2f €")
-                },
-                hide_index=True, use_container_width=True
-            )
+            st.dataframe(df_comp.drop(columns=['Dias_Factura'], errors='ignore'), use_container_width=True, hide_index=True)
 
-            # --- LÓGICA DE RESUMEN PARA EXCEL ---
-            mejor_df = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"]
-            nombre_mejor = "N/A"
-            ahorro_mensual_mejor = 0.0
-            ahorro_anual_val = 0.0
-
-            if not mejor_df.empty:
-                mejor = mejor_df.iloc[0]
-                nombre_mejor = mejor['Compañía/Tarifa']
-                ahorro_mensual_mejor = mejor['Ahorro']
-                
-                if ahorro_mensual_mejor > 0:
-                    ahorro_anual_val = (ahorro_mensual_mejor / mejor["Dias_Factura"]) * 365 if mejor["Dias_Factura"] > 0 else 0
-                    st.success(f"💡 **Oportunidad de Ahorro:** Cambiándote a **{nombre_mejor}** ahorrarías **{ahorro_mensual_mejor} €** en este recibo.")
-                    st.metric(label="Estimado de Ahorro Anual", value=f"{round(ahorro_anual_val, 2)} €")
-                else:
-                    st.info("✅ Tu tarifa actual parece ser la más competitiva por ahora.")
-
-            # --- GENERACIÓN DE EXCEL COMPLETO ---
+            # --- LÓGICA DE AHORRO ANUAL AGRUPADO POR COMPAÑÍA ---
             st.divider()
+            st.subheader("📈 Resumen de Ahorro Anual Proyectado")
+
+            # Agrupamos por compañía para sumar ahorros y días totales analizados
+            resumen_anual = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"].groupby("Compañía/Tarifa").agg({
+                "Ahorro": "sum",
+                "Dias_Factura": "sum"
+            }).reset_index()
+
+            # Calcular proyección a 365 días: (Ahorro total / Días totales) * 365
+            resumen_anual["Ahorro Anual Estimado"] = resumen_anual.apply(
+                lambda x: round((x["Ahorro"] / x["Dias_Factura"]) * 365, 2) if x["Dias_Factura"] > 0 else 0, axis=1
+            )
+            
+            resumen_anual = resumen_anual.sort_values(by="Ahorro Anual Estimado", ascending=False)
+
+            # Mostrar métricas del mejor
+            if not resumen_anual.empty:
+                mejor_global = resumen_anual.iloc[0]
+                if mejor_global["Ahorro Anual Estimado"] > 0:
+                    st.success(f"🏆 La mejor opción global tras analizar {mejor_global['Dias_Factura']} días es **{mejor_global['Compañía/Tarifa']}**.")
+                    st.metric(label=f"Ahorro Anual con {mejor_global['Compañía/Tarifa']}", value=f"{mejor_global['Ahorro Anual Estimado']} €")
+                
+                st.write("### Comparativa de Ahorro Anual por Compañía")
+                st.table(resumen_anual[["Compañía/Tarifa", "Ahorro Anual Estimado"]].rename(columns={"Ahorro Anual Estimado": "Ahorro Anual (€)"}))
+
+            # --- GENERACIÓN DE EXCEL ---
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                df_comp.to_excel(writer, index=False, sheet_name='Comparativa Mercado')
-                df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Detalles Extraidos PDF')
-                
-                resumen_exec = {
-                    "Concepto": ["Mejor Opción", "Ahorro Mensual", "Ahorro Anual Estimado"],
-                    "Valor": [nombre_mejor, f"{ahorro_mensual_mejor} €", f"{round(ahorro_anual_val, 2)} €"]
-                }
-                pd.DataFrame(resumen_exec).to_excel(writer, index=False, sheet_name='Resumen Ahorro')
+                df_comp.to_excel(writer, index=False, sheet_name='Detalle por Factura')
+                df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Extraidos')
+                resumen_anual.to_excel(writer, index=False, sheet_name='Resumen Anual por Compania')
 
             st.download_button(
                 label="📥 Descargar Informe Completo (Excel)",
                 data=buffer_excel.getvalue(),
-                file_name="estudio_ahorro_energetico.xlsx",
+                file_name="estudio_energetico_anual.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
