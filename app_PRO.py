@@ -1,7 +1,6 @@
 
 
 
-
 import pdfplumber
 import re
 import pandas as pd
@@ -188,4 +187,4 @@ else:
                 else:
                     st.info("Ya tienes la mejor tarifa.")
 
-Cual es la parte del codigo que lee los consumos y potencia  de la factura que introduce el usurario
+
