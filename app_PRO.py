@@ -156,10 +156,8 @@ else:
             df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
             df_comp = df_comp.sort_values(by=["Mes/Fecha", "Coste (€)"], ascending=[True, True])
 
-            # --- TABLA COMPARATIVA CON LÓGICA DE COLORES ---
+            # --- TABLA COMPARATIVA ---
             st.subheader("📊 Comparativa de Mercado")
-
-            # Nueva columna de Estado con semáforos para identificar ahorro rápido
             df_comp["Estado"] = df_comp["Ahorro"].apply(
                 lambda x: "🟢 Ahorro" if x > 0.01 else ("⚪ Actual" if abs(x) <= 0.01 else "🔴 Más caro")
             )
@@ -171,33 +169,33 @@ else:
                     "Compañía/Tarifa": "🏢 Proveedor / Opción",
                     "Estado": st.column_config.TextColumn("Situación"),
                     "Coste (€)": st.column_config.ProgressColumn(
-                        "Coste Mensual", 
-                        format="%.2f €", 
-                        min_value=0,
+                        "Coste Mensual", format="%.2f €", min_value=0,
                         max_value=float(df_comp["Coste (€)"].max()),
                     ),
-                    "Ahorro": st.column_config.NumberColumn(
-                        "Diferencia vs Actual", 
-                        format="%.2f €",
-                        help="Verde = Ahorras dinero | Rojo = Pagarías más"
-                    )
+                    "Ahorro": st.column_config.NumberColumn("Diferencia vs Actual", format="%.2f €")
                 },
-                hide_index=True,
-                use_container_width=True
+                hide_index=True, use_container_width=True
             )
 
-            # --- LÓGICA DE ESTIMACIÓN ANUAL ---
+            # --- LÓGICA DE RESUMEN PARA EXCEL ---
             mejor_df = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"]
+            nombre_mejor = "N/A"
+            ahorro_mensual_mejor = 0.0
+            ahorro_anual_val = 0.0
+
             if not mejor_df.empty:
                 mejor = mejor_df.iloc[0]
-                if mejor["Ahorro"] > 0:
-                    ahorro_anual = (mejor["Ahorro"] / mejor["Dias_Factura"]) * 365 if mejor["Dias_Factura"] > 0 else 0
-                    st.success(f"💡 **Oportunidad de Ahorro:** Cambiándote a **{mejor['Compañía/Tarifa']}** ahorrarías **{mejor['Ahorro']} €** en este recibo.")
-                    st.metric(label="Estimado de Ahorro Anual", value=f"{round(ahorro_anual, 2)} €")
+                nombre_mejor = mejor['Compañía/Tarifa']
+                ahorro_mensual_mejor = mejor['Ahorro']
+                
+                if ahorro_mensual_mejor > 0:
+                    ahorro_anual_val = (ahorro_mensual_mejor / mejor["Dias_Factura"]) * 365 if mejor["Dias_Factura"] > 0 else 0
+                    st.success(f"💡 **Oportunidad de Ahorro:** Cambiándote a **{nombre_mejor}** ahorrarías **{ahorro_mensual_mejor} €** en este recibo.")
+                    st.metric(label="Estimado de Ahorro Anual", value=f"{round(ahorro_anual_val, 2)} €")
                 else:
                     st.info("✅ Tu tarifa actual parece ser la más competitiva por ahora.")
 
-# --- GENERACIÓN DE EXCEL COMPLETO ----
+            # --- GENERACIÓN DE EXCEL COMPLETO ---
             st.divider()
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
@@ -217,5 +215,3 @@ else:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
-
-
