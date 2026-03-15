@@ -77,15 +77,15 @@ def extraer_datos_factura(pdf_path):
         "Total Real": total_real
     }
 
-st.set_page_config(page_title="Comparador Energético", layout="wide")
-st.title("⚡ Comparador de Facturas Eléctricas Pro")
+st.set_page_config(page_title="Comparador Energético Pro", layout="wide")
+st.title("⚡ Comparador de Facturas Eléctricas")
 
 excel_path = "tarifas_companias.xlsx"
 
 if not os.path.exists(excel_path):
-    st.error(f"No se encuentra el archivo '{excel_path}' en el repositorio.")
+    st.error(f"No se encuentra el archivo '{excel_path}'.")
 else:
-    uploaded_files = st.file_uploader("Sube tus facturas PDF", type="pdf", accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Sube una o varias facturas PDF", type="pdf", accept_multiple_files=True)
 
     if uploaded_files:
         datos_facturas = []
@@ -95,26 +95,15 @@ else:
                 res['Archivo'] = uploaded_file.name
                 datos_facturas.append(res)
             except Exception as e:
-                st.error(f"Error procesando {uploaded_file.name}: {e}")
+                st.error(f"Error en {uploaded_file.name}: {e}")
 
         if datos_facturas:
             df_resumen_pdfs = pd.DataFrame(datos_facturas)
-            with st.expander("🔍 Ver detalles de datos extraídos"):
-                st.dataframe(df_resumen_pdfs, use_container_width=True)
-
             df_tarifas = pd.read_excel(excel_path)
             resultados_finales = []
 
             for _, fact in df_resumen_pdfs.iterrows():
-                resultados_finales.append({
-                    "Mes/Fecha": fact['Fecha'],
-                    "Compañía/Tarifa": "📍 TU FACTURA ACTUAL",
-                    "Coste (€)": fact['Total Real'],
-                    "Ahorro": 0.0,
-                    "Dias_Factura": fact['Días']
-                })
-
-                for index, tarifa in df_tarifas.iterrows():
+                for _, tarifa in df_tarifas.iterrows():
                     try:
                         nombre_cia = tarifa.iloc[0]
                         b_pot1 = pd.to_numeric(tarifa.iloc[1], errors='coerce')
@@ -131,64 +120,57 @@ else:
                                          (fact['Consumo Valle (kWh)'] * f_valle) - \
                                          (fact['Excedente (kWh)'] * g_excedente)
                         
-                        ahorro = fact['Total Real'] - coste_estimado
                         resultados_finales.append({
-                            "Mes/Fecha": fact['Fecha'],
                             "Compañía/Tarifa": nombre_cia,
-                            "Coste (€)": round(coste_estimado, 2),
-                            "Ahorro": round(ahorro, 2),
-                            "Dias_Factura": fact['Días']
+                            "Ahorro_Parcial": fact['Total Real'] - coste_estimado,
+                            "Dias_Parcial": fact['Días']
                         })
                     except: continue
 
-            df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
-            df_comp = df_comp.sort_values(by=["Mes/Fecha", "Coste (€)"], ascending=[True, True])
-
-            st.subheader("📊 Comparativa de Mercado (Detalle por Factura)")
-            df_comp["Estado"] = df_comp["Ahorro"].apply(
-                lambda x: "🟢 Ahorro" if x > 0.01 else ("⚪ Actual" if abs(x) <= 0.01 else "🔴 Más caro")
-            )
-
-            st.dataframe(df_comp.drop(columns=['Dias_Factura'], errors='ignore'), use_container_width=True, hide_index=True)
-
-            # --- LÓGICA DE AHORRO ANUAL AGRUPADO POR COMPAÑÍA ---
-            st.divider()
-            st.subheader("📈 Resumen de Ahorro Anual Proyectado")
-
-            # Agrupamos por compañía para sumar ahorros y días totales analizados
-            resumen_anual = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"].groupby("Compañía/Tarifa").agg({
-                "Ahorro": "sum",
-                "Dias_Factura": "sum"
+            df_calculos = pd.DataFrame(resultados_finales)
+            
+            # --- AGRUPACIÓN LÓGICA: UNA COMPAÑÍA PARA TODAS LAS FACTURAS ---
+            resumen_cia = df_calculos.groupby("Compañía/Tarifa").agg({
+                "Ahorro_Parcial": "sum",
+                "Dias_Parcial": "sum"
             }).reset_index()
 
-            # Calcular proyección a 365 días: (Ahorro total / Días totales) * 365
-            resumen_anual["Ahorro Anual Estimado"] = resumen_anual.apply(
-                lambda x: round((x["Ahorro"] / x["Dias_Factura"]) * 365, 2) if x["Dias_Factura"] > 0 else 0, axis=1
+            # Proyección anual: (Ahorro total / Días totales) * 365
+            resumen_cia["Ahorro Anual Estimado"] = resumen_cia.apply(
+                lambda x: round((x["Ahorro_Parcial"] / x["Dias_Parcial"]) * 365, 2) if x["Dias_Parcial"] > 0 else 0, axis=1
             )
             
-            resumen_anual = resumen_anual.sort_values(by="Ahorro Anual Estimado", ascending=False)
+            resumen_cia = resumen_cia.sort_values(by="Ahorro Anual Estimado", ascending=False)
 
-            # Mostrar métricas del mejor
-            if not resumen_anual.empty:
-                mejor_global = resumen_anual.iloc[0]
-                if mejor_global["Ahorro Anual Estimado"] > 0:
-                    st.success(f"🏆 La mejor opción global tras analizar {mejor_global['Dias_Factura']} días es **{mejor_global['Compañía/Tarifa']}**.")
-                    st.metric(label=f"Ahorro Anual con {mejor_global['Compañía/Tarifa']}", value=f"{mejor_global['Ahorro Anual Estimado']} €")
-                
-                st.write("### Comparativa de Ahorro Anual por Compañía")
-                st.table(resumen_anual[["Compañía/Tarifa", "Ahorro Anual Estimado"]].rename(columns={"Ahorro Anual Estimado": "Ahorro Anual (€)"}))
+            # --- RESULTADOS VISUALES ---
+            st.subheader("🏆 Ranking de Ahorro Global")
+            
+            if not resumen_cia.empty:
+                mejor = resumen_cia.iloc[0]
+                if mejor["Ahorro Anual Estimado"] > 0:
+                    st.success(f"La mejor opción para este cliente es **{mejor['Compañía/Tarifa']}**")
+                    col1, col2 = st.columns(2)
+                    col1.metric("Ahorro Anual Proyectado", f"{mejor['Ahorro Anual Estimado']} €")
+                    col2.metric("Compañía Recomendada", mejor['Compañía/Tarifa'])
+                else:
+                    st.warning("Ninguna tarifa del Excel mejora la factura actual.")
 
-            # --- GENERACIÓN DE EXCEL ---
+                st.write("### Comparativa por Compañía (Anualizado)")
+                st.dataframe(
+                    resumen_cia[["Compañía/Tarifa", "Ahorro Anual Estimado"]].rename(columns={"Ahorro Anual Estimado": "Ahorro Anual (€)"}),
+                    use_container_width=True, hide_index=True
+                )
+
+            # --- EXCEL ---
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                df_comp.to_excel(writer, index=False, sheet_name='Detalle por Factura')
+                resumen_cia.to_excel(writer, index=False, sheet_name='Resumen Ahorro')
                 df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Extraidos')
-                resumen_anual.to_excel(writer, index=False, sheet_name='Resumen Anual por Compania')
 
             st.download_button(
-                label="📥 Descargar Informe Completo (Excel)",
+                label="📥 Descargar Informe en Excel",
                 data=buffer_excel.getvalue(),
-                file_name="estudio_energetico_anual.xlsx",
+                file_name="comparativa_ahorro_total.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
