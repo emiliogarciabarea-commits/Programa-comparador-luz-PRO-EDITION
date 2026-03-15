@@ -12,7 +12,7 @@ def extraer_datos_factura(pdf_path):
         for pagina in pdf.pages:
             texto_completo += pagina.extract_text() + "\n"
 
-    # 1. Búsqueda de Consumos (Soporte universal)
+    # 1. Búsqueda de Consumos (Sin cambios)
     patrones_consumo = {
         'punta': [
             r'Consumo\s+kWh\s+([\d,.]+)\s+[\d,.]+\s+[\d,.]+', 
@@ -43,27 +43,27 @@ def extraer_datos_factura(pdf_path):
                 consumos[tramo] = float(match.group(1).replace(',', '.'))
                 break
 
-    # 2. Búsqueda de Potencia (Ajustado para XXI: "Potencia contratada en punta-llano: X,XXX kW")
-    patron_potencia = r'(?:Potencia:?\s*Punta:?|Potencia\s+contratada(?:\s+en\s+punta-llano)?|Potencia\s+P1:?)[\s\n:]*([\d,.]+)'
+    # 2. Búsqueda de Potencia (MODIFICADO para XXI: "punta-llano")
+    patron_potencia = r'(?:Potencia:?\s*Punta:?|Potencia\s+contratada\s+en\s+punta-llano:?|Potencia\s+contratada\s+kW|Potencia\s+contratada|Potencia\s+P1:?)[\s\n]*([\d,.]+)'
     match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
     potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
 
-    # 3. Fecha (Mejorado para detectar formatos como "18 de febrero de 2026")
-    patron_fecha = r'(?:Fecha\s+de\s+emisión:|emitida\s+el|Fecha\s+de\s+Factura:)\s*([\d]{1,2}(?:\s+de\s+\w+\s+de\s+)?[\d/]{2,10})'
+    # 3. Fecha (MODIFICADO para capturar fechas con nombres de mes)
+    patron_fecha = r'(?:Fecha\s+de\s+emisión:|emitida\s+el|Fecha\s+de\s+Factura:)\s*([\d]{1,2}\s*(?:de\s+\w+\s+de\s+)?[\d/]{2,10})'
     match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
     fecha = match_fecha.group(1).strip() if match_fecha else "No encontrada"
 
-    # 3b. Días (Mejorado para capturar "(28 días)")
+    # 3b. Días (MODIFICADO para capturar "(X días)")
     patron_dias = r'(?:Días\s+de\s+consumo:|Periodo\s+de\s+consumo:.*?|\()(\d+)\s*días'
     match_dias = re.search(patron_dias, texto_completo, re.IGNORECASE | re.DOTALL)
     dias = int(match_dias.group(1)) if match_dias else 0
 
-    # 4. Excedentes
+    # 4. Excedentes (Sin cambios)
     patron_excedente = r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh'
     match_excedente = re.search(patron_excedente, texto_completo, re.IGNORECASE)
     excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
     
-    # 5. Total Real
+    # 5. Total Real (Sin cambios)
     total_real = 0.0
     es_xxi = re.search(r'Energía\s+XXI', texto_completo, re.IGNORECASE)
     if es_xxi:
