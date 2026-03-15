@@ -186,7 +186,7 @@ else:
             mejor = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"].iloc[0]
             if mejor["Ahorro"] > 0:
                 # Calculamos el ahorro anual proyectado: (Ahorro / Días Factura) * 365
-                ahorro_anual = (mejor["Ahorro"] / mejor["Dias_Factura"]) * 365 if mejor["Dias_Factura"] > 0 else 0
+                ahorro_anual = (mejor["Ahorro"]) * 12 if mejor["Dias_Factura"] > 0 else 0
                 
                 st.success(f"💡 **Oportunidad de Ahorro:** Cambiándote a **{mejor['Compañía/Tarifa']}** ahorrarías **{mejor['Ahorro']} €** en este recibo.")
                 st.metric(label="Estimado de Ahorro Anual", value=f"{round(ahorro_anual, 2)} €")
