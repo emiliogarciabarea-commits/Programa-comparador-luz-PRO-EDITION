@@ -6,7 +6,71 @@ import streamlit as st
 import io
 import os
 import base64
-from fpdf import FPDF
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+
+def generar_pdf_resumen(datos_factura, df_comparativo):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    elements = []
+    styles = getSampleStyleSheet()
+
+    # Título
+    elements.append(Paragraph("Informe Resumen de Comparativa Energética", styles['Title']))
+    elements.append(Spacer(1, 12))
+
+    # 1. Tabla de Datos Extraídos
+    elements.append(Paragraph("1. Datos extraídos de la factura", styles['Heading2']))
+    datos_input = [["Concepto", "Valor"]]
+    for k, v in datos_factura.items():
+        if k != "Archivo":
+            datos_input.append([k, str(v)])
+    
+    t_input = Table(datos_input, colWidths=[200, 200])
+    t_input.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('PADDING', (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(t_input)
+    elements.append(Spacer(1, 20))
+
+    # 2. Tabla Comparativa
+    elements.append(Paragraph("2. Comparativa de Mercado", styles['Heading2']))
+    # Limpiamos el dataframe para el PDF
+    df_pdf = df_comparativo[["Compañía/Tarifa", "Coste (€)", "Ahorro"]].copy()
+    data_comp = [df_pdf.columns.to_list()] + df_pdf.values.tolist()
+    
+    t_comp = Table(data_comp, colWidths=[200, 100, 100])
+    t_comp.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+    ]))
+    elements.append(t_comp)
+    elements.append(Spacer(1, 20))
+
+    # 3. Estimación Anual
+    mejor_opcion = df_comparativo[df_comparativo["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"].iloc[0]
+    ahorro_mensual = mejor_opcion["Ahorro"]
+    # Proyectar ahorro basado en los días de la factura
+    dias = datos_factura.get("Días", 30)
+    ahorro_anual = (ahorro_mensual / dias) * 365 if dias > 0 else 0
+    
+    resumen_final = f"""
+    <b>Mejor opción encontrada:</b> {mejor_opcion['Compañía/Tarifa']}<br/>
+    <b>Ahorro en este periodo:</b> {ahorro_mensual:.2f} €<br/>
+    <b>Estimación de ahorro anualizado:</b> {ahorro_anual:.2f} €
+    """
+    elements.append(Paragraph("3. Conclusión y Ahorro Estimado", styles['Heading2']))
+    elements.append(Paragraph(resumen_final, styles['Normal']))
+
+    doc.build(elements)
+    return buffer.getvalue()
 
 def extraer_datos_factura(pdf_path):
     texto_completo = ""
@@ -14,7 +78,6 @@ def extraer_datos_factura(pdf_path):
         for pagina in pdf.pages:
             texto_completo += pagina.extract_text() + "\n"
 
-    # --- DETECCIÓN DE TIPO DE FACTURA ---
     es_el_corte_ingles = re.search(r'Energía\s+El\s+Corte\s+Inglés|TELECOR', texto_completo, re.IGNORECASE)
 
     if es_el_corte_ingles:
@@ -39,7 +102,7 @@ def extraer_datos_factura(pdf_path):
         total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
         excedente = 0.0
     else:
-        # Lógica para otros formatos (se mantiene intacta)
+        # Lógica estándar (mantenida intacta)
         patrones_consumo = {
             'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh'],
             'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh'],
@@ -65,14 +128,8 @@ def extraer_datos_factura(pdf_path):
         patron_excedente = r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh'
         match_excedente = re.search(patron_excedente, texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
-        es_xxi = re.search(r'Comercializadora\s+de\s+Referencia\s+Energética\s+por\s+XXI|Energía\s+XXI', texto_completo, re.IGNORECASE)
-        if es_xxi:
-            m_pot = re.search(r'por\s+potencia\s+contratada\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-            m_ene = re.search(r'por\s+energía\s+consumida\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-            total_real = (float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0) + (float(m_ene.group(1).replace(',', '.')) if m_ene else 0.0)
-        else:
-            match_total = re.search(r'(?:Subtotal|Importe\s+total|Total\s+factura)\s*:?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-            total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
+        match_total = re.search(r'(?:Subtotal|Importe\s+total|Total\s+factura)\s*:?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
     return {
         "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
@@ -80,54 +137,6 @@ def extraer_datos_factura(pdf_path):
         "Consumo Valle (kWh)": consumos['valle'], "Excedente (kWh)": excedente,
         "Total Real": total_real
     }
-
-def crear_pdf_resumen(datos_factura, df_comparativo):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, "Informe de Ahorro Energético", 0, 1, 'C')
-    pdf.ln(10)
-    
-    # 1. Datos de Entrada
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, "1. Datos extraídos de la factura:", 0, 1)
-    pdf.set_font("Arial", '', 10)
-    for clave, valor in datos_factura.items():
-        if clave != "Archivo":
-            pdf.cell(0, 7, f"{clave}: {valor}", 0, 1)
-    pdf.ln(5)
-
-    # 2. Tabla Comparativa
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, "2. Tabla Comparativa de Mercado:", 0, 1)
-    pdf.set_font("Arial", 'B', 9)
-    pdf.cell(60, 8, "Compañía/Tarifa", 1)
-    pdf.cell(40, 8, "Coste (€)", 1)
-    pdf.cell(40, 8, "Ahorro (€)", 1)
-    pdf.ln()
-    
-    pdf.set_font("Arial", '', 9)
-    for _, fila in df_comparativo.iterrows():
-        pdf.cell(60, 8, str(fila['Compañía/Tarifa']), 1)
-        pdf.cell(40, 8, f"{fila['Coste (€)']:.2f} €", 1)
-        pdf.cell(40, 8, f"{fila['Ahorro']:.2f} €", 1)
-        pdf.ln()
-    
-    # 3. Estimación Anual
-    pdf.ln(10)
-    pdf.set_font("Arial", 'B', 12)
-    mejor_opcion = df_comparativo[df_comparativo["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"].iloc[0]
-    ahorro_mensual = mejor_opcion['Ahorro']
-    # Estimación simple: (Ahorro / días_factura) * 365
-    dias = datos_factura['Días'] if datos_factura['Días'] > 0 else 30
-    ahorro_anual = (ahorro_mensual / dias) * 365
-    
-    pdf.cell(0, 10, "3. Estimación de Ahorro Anual:", 0, 1)
-    pdf.set_font("Arial", 'I', 11)
-    pdf.multi_cell(0, 8, f"Cambiando a la tarifa '{mejor_opcion['Compañía/Tarifa']}', "
-                         f"podría obtener un ahorro estimado de {ahorro_anual:.2f} € al año.")
-
-    return pdf.output(dest='S').encode('latin-1')
 
 # --- INTERFAZ STREAMLIT ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
@@ -152,13 +161,11 @@ else:
 
         if datos_facturas:
             df_resumen_pdfs = pd.DataFrame(datos_facturas)
-            
-            with st.expander("🔍 Ver detalles de datos extraídos (Input)"):
-                st.dataframe(df_resumen_pdfs, use_container_width=True)
-
             df_tarifas = pd.read_excel(excel_path)
             
-            for _, fact in df_resumen_pdfs.iterrows():
+            for index_fact, fact in df_resumen_pdfs.iterrows():
+                st.subheader(f"Análisis de: {fact['Archivo']}")
+                
                 resultados_finales = []
                 resultados_finales.append({
                     "Mes/Fecha": fact['Fecha'],
@@ -167,7 +174,7 @@ else:
                     "Ahorro": 0.0
                 })
 
-                for index, tarifa in df_tarifas.iterrows():
+                for _, tarifa in df_tarifas.iterrows():
                     try:
                         nombre_cia = tarifa.iloc[0]
                         b_pot1 = pd.to_numeric(tarifa.iloc[1], errors='coerce')
@@ -196,15 +203,15 @@ else:
                 df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
                 df_comp = df_comp.sort_values(by=["Coste (€)"], ascending=[True])
 
-                st.subheader(f"📊 Resultados para: {fact['Archivo']}")
+                # Mostrar Tabla en App
                 st.dataframe(df_comp, hide_index=True, use_container_width=True)
 
-                # Generación del PDF de resumen
-                pdf_bytes = crear_pdf_resumen(fact.to_dict(), df_comp)
-                
+                # Botón de Descarga de Informe PDF
+                pdf_data = generar_pdf_resumen(fact.to_dict(), df_comp)
                 st.download_button(
-                    label="📥 Descargar PDF Resumen y Estimación Anual",
-                    data=pdf_bytes,
+                    label="📥 Descargar Informe Resumen (PDF)",
+                    data=pdf_data,
                     file_name=f"Resumen_Ahorro_{fact['Archivo']}.pdf",
                     mime="application/pdf"
                 )
+                st.divider()
