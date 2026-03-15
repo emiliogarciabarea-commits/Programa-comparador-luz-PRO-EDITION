@@ -36,13 +36,13 @@ def extraer_datos_factura(pdf_path):
         total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
         excedente = 0.0 
     else:
-        patones_consumo = {
+        patrones_consumo = {
             'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh'],
             'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh'],
             'valle': [r'Consumo\s+en\s+P3:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh']
         }
         consumos = {}
-        for tramo, patrones in patones_consumo.items():
+        for tramo, patrones in patrones_consumo.items():
             consumos[tramo] = 0.0
             for patron in patrones:
                 match = re.search(patron, texto_completo, re.IGNORECASE)
@@ -77,74 +77,84 @@ def extraer_datos_factura(pdf_path):
         "Total Real": total_real
     }
 
-st.set_page_config(page_title="Comparador Energético", layout="wide")
-st.title("⚡ Comparador de Facturas Eléctricas Pro")
+st.set_page_config(page_title="Comparador Energético Multi-Mes", layout="wide")
+st.title("⚡ Comparador de Facturas: Análisis Acumulado")
 
 excel_path = "tarifas_companias.xlsx"
 
 if not os.path.exists(excel_path):
     st.error(f"No se encuentra el archivo '{excel_path}' en el repositorio.")
 else:
-    uploaded_files = st.file_uploader("Sube tus facturas PDF (puedes subir varias)", type="pdf", accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Sube una o varias facturas PDF", type="pdf", accept_multiple_files=True)
 
     if uploaded_files:
         datos_facturas = []
         for uploaded_file in uploaded_files:
             try:
                 res = extraer_datos_factura(io.BytesIO(uploaded_file.read()))
-                res['Archivo'] = uploaded_file.name
                 datos_facturas.append(res)
             except Exception as e:
                 st.error(f"Error procesando {uploaded_file.name}: {e}")
 
         if datos_facturas:
-            df_resumen_pdfs = pd.DataFrame(datos_facturas)
+            df_pdfs = pd.DataFrame(datos_facturas)
+            
+            # --- CÁLCULOS ACUMULADOS DE TODAS LAS FACTURAS ---
+            total_dias = df_pdfs['Días'].sum()
+            total_pagado_real = df_pdfs['Total Real'].sum()
+            potencia_media = df_pdfs['Potencia (kW)'].mean() # Usamos la media por si varía
+
             df_tarifas = pd.read_excel(excel_path)
-            resultados_finales = []
+            resumen_comparativo = []
 
-            # Calculamos para cada factura y cada tarifa del Excel
-            for _, fact in df_resumen_pdfs.iterrows():
-                for index, tarifa in df_tarifas.iterrows():
-                    try:
-                        nombre_cia = tarifa.iloc[0]
-                        b_pot1, c_pot2, d_punta, e_llano, f_valle, g_excedente = [pd.to_numeric(tarifa.iloc[i], errors='coerce') for i in range(1, 7)]
+            # 1. Añadir la situación actual (Total de todas las facturas)
+            resumen_comparativo.append({
+                "Compañía/Tarifa": "📍 TU GASTO ACTUAL (Total)",
+                "Coste Total Facturas (€)": round(total_pagado_real, 2),
+                "Ahorro Total (€)": 0.0,
+                "Ahorro Anual Est. (€)": 0.0
+            })
 
-                        coste_estimado = (fact['Días'] * b_pot1 * fact['Potencia (kW)']) + \
-                                         (fact['Días'] * c_pot2 * fact['Potencia (kW)']) + \
-                                         (fact['Consumo Punta (kWh)'] * d_punta) + \
-                                         (fact['Consumo Llano (kWh)'] * e_llano) + \
-                                         (fact['Consumo Valle (kWh)'] * f_valle) - \
-                                         (fact['Excedente (kWh)'] * g_excedente)
-                        
-                        ahorro = fact['Total Real'] - coste_estimado
-                        resultados_finales.append({
-                            "Compañía": nombre_cia,
-                            "Ahorro": ahorro,
-                            "Días": fact['Días']
-                        })
-                    except: continue
+            # 2. Calcular coste en otras compañías para el MISMO periodo total
+            for _, tarifa in df_tarifas.iterrows():
+                try:
+                    nombre_cia = tarifa.iloc[0]
+                    b_pot1, c_pot2 = pd.to_numeric(tarifa.iloc[1:3], errors='coerce')
+                    d_punta, e_llano, f_valle = pd.to_numeric(tarifa.iloc[3:6], errors='coerce')
+                    g_excedente = pd.to_numeric(tarifa.iloc[6], errors='coerce')
 
-            # Agrupamos resultados para ver cuál es la mejor compañía sumando todas las facturas
-            if resultados_finales:
-                df_ahorro_total = pd.DataFrame(resultados_finales)
-                resumen_cia = df_ahorro_total.groupby("Compañía").agg({"Ahorro": "sum", "Días": "sum"}).reset_index()
-                resumen_cia = resumen_cia.sort_values(by="Ahorro", ascending=False)
+                    # Calculamos el coste que habrían tenido todas las facturas juntas con esta nueva tarifa
+                    coste_cia_total = 0
+                    for _, f in df_pdfs.iterrows():
+                        coste_cia_total += (f['Días'] * b_pot1 * f['Potencia (kW)']) + \
+                                          (f['Días'] * c_pot2 * f['Potencia (kW)']) + \
+                                          (f['Consumo Punta (kWh)'] * d_punta) + \
+                                          (f['Consumo Llano (kWh)'] * e_llano) + \
+                                          (f['Consumo Valle (kWh)'] * f_valle) - \
+                                          (f['Excedente (kWh)'] * g_excedente)
 
-                mejor_opcion = resumen_cia.iloc[0]
+                    ahorro_total = total_pagado_real - coste_cia_total
+                    ahorro_anual = (ahorro_total / total_dias) * 365 if total_dias > 0 else 0
 
-                if mejor_opcion["Ahorro"] > 0:
-                    # Proyección anual: (Ahorro total acumulado / Días totales acumulados) * 365
-                    proyeccion_anual = (mejor_opcion["Ahorro"] / mejor_opcion["Días"]) * 365
-                    
-                    st.success(f"🏆 **La mejor opción tras analizar {len(uploaded_files)} facturas es {mejor_opcion['Compañía']}**")
-                    
-                    col1, col2 = st.columns(2)
-                    col1.metric("Ahorro Acumulado (PDFs)", f"{round(mejor_opcion['Ahorro'], 2)} €")
-                    col2.metric("Estimado Ahorro Anual", f"{round(proyeccion_anual, 2)} €", delta="Proyectado")
-                    
-                    st.info(f"Este cálculo se basa en un histórico de {mejor_opcion['Días']} días analizados.")
-                else:
-                    st.warning("⚠️ Ninguna tarifa del archivo Excel mejora tus facturas actuales.")
+                    resumen_comparativo.append({
+                        "Compañía/Tarifa": nombre_cia,
+                        "Coste Total Facturas (€)": round(coste_cia_total, 2),
+                        "Ahorro Total (€)": round(ahorro_total, 2),
+                        "Ahorro Anual Est. (€)": round(ahorro_anual, 2)
+                    })
+                except: continue
 
-            with st.expander("🔍 Ver desglose por factura extraída"):
-                st.dataframe(df_resumen_pdfs, use_container_width=True)
+            df_final = pd.DataFrame(resumen_comparativo).sort_values(by="Coste Total Facturas (€)")
+
+            # --- INTERFAZ DE RESULTADOS ---
+            st.subheader(f"📊 Resultado para un periodo de {total_dias} días ({len(datos_facturas)} facturas)")
+            
+            st.table(df_final) # Tabla comparativa simple y directa
+
+            # Resaltar la mejor opción
+            mejor_opcion = df_final[df_final["Ahorro Total (€)"] > 0].iloc[0] if not df_final[df_final["Ahorro Total (€)"] > 0].empty else None
+            
+            if mejor_opcion is not None:
+                st.success(f"🏆 La mejor opción es **{mejor_opcion['Compañía/Tarifa']}**. "
+                           f"Habrías ahorrado **{mejor_opcion['Ahorro Total (€)']} €** en este periodo.")
+                st.info(f"📈 Proyección: El ahorro anual estimado con esta compañía es de **{mejor_opcion['Ahorro Anual Est. (€)']} €**.")
