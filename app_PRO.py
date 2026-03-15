@@ -197,3 +197,33 @@ else:
                 else:
                     st.info("✅ Tu tarifa actual parece ser la más competitiva por ahora.")
 
+# --- GENERACIÓN DE EXCEL COMPLETO ---
+st.divider()
+            buffer_excel = io.BytesIO()
+            with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+                # Hoja 1: Comparativa completa
+                df_comp.to_excel(writer, index=False, sheet_name='Comparativa Mercado')
+                
+                # Hoja 2: Detalles extraídos del PDF
+                df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Detalles Extraidos PDF')
+                
+                # Hoja 3: Resumen Ejecutivo
+                resumen_data = {
+                    "Concepto": ["Mejor Opción", "Ahorro Mensual", "Días Factura", "Ahorro Anual Estimado"],
+                    "Valor": [
+                        mejor['Compañía/Tarifa'] if not mejor_df.empty else "N/A",
+                        f"{mejor['Ahorro']} €" if not mejor_df.empty else "0 €",
+                        mejor['Dias_Factura'] if not mejor_df.empty else 0,
+                        f"{round(ahorro_anual_val, 2)} €"
+                    ]
+                }
+                pd.DataFrame(resumen_data).to_excel(writer, index=False, sheet_name='Resumen Ahorro')
+
+            st.download_button(
+                label="📥 Descargar Informe Completo (Excel)",
+                data=buffer_excel.getvalue(),
+                file_name="estudio_ahorro_energetico.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+
