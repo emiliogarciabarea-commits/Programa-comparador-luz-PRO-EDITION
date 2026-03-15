@@ -4,7 +4,6 @@ import pandas as pd
 import streamlit as st
 import io
 import os
-import plotly.express as px  # Importamos Plotly para la gráfica pro
 
 def extraer_datos_factura(pdf_path):
     texto_completo = ""
@@ -145,35 +144,24 @@ else:
             df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
             df_comp = df_comp.sort_values(by=["Mes/Fecha", "Coste (€)"], ascending=[True, True])
 
-            # --- NUEVA SECCIÓN: GRÁFICA DE BARRAS CON COLORES ---
-            st.subheader("📊 Gráfico Comparativo de Ahorro")
-            
-            # Preparamos datos para la gráfica (excluimos la factura actual para ver el ahorro real)
-            df_plot = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"].copy()
-            df_plot["Estado"] = df_plot["Ahorro"].apply(lambda x: "Ahorro (Verde)" if x > 0 else "Sobrecoste (Rojo)")
+            # --- APLICAR COLORES A LA TABLA ---
+            def color_ahorro(row):
+                # Si el ahorro es mayor que 0, el coste es verde. Si es menor, rojo.
+                # La fila actual (ahorro 0) se queda por defecto.
+                if row['Compañía/Tarifa'] == "📍 TU FACTURA ACTUAL":
+                    return [''] * len(row)
+                color = 'color: #27ae60;' if row['Ahorro'] > 0 else 'color: #e74c3c;'
+                return [color if col == 'Coste (€)' else '' for col in row.index]
 
-            fig = px.bar(
-                df_plot,
-                x="Compañía/Tarifa",
-                y="Ahorro",
-                color="Estado",
-                color_discrete_map={"Ahorro (Verde)": "#2ecc71", "Sobrecoste (Rojo)": "#e74c3c"},
-                title="Ahorro/Sobrecoste por Compañía en este período",
-                labels={"Ahorro": "Euros (€)"}
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            df_styled = df_comp.drop(columns=['Dias_Factura'], errors='ignore').style.apply(color_ahorro, axis=1)
 
-            # --- TABLA COMPARATIVA ORIGINAL ---
-            st.subheader("📋 Tabla Comparativa de Mercado")
+            st.subheader("📊 Comparativa de Mercado")
             st.dataframe(
-                df_comp.drop(columns=['Dias_Factura'], errors='ignore'),
+                df_styled,
                 column_config={
                     "Mes/Fecha": "📅 Período",
                     "Compañía/Tarifa": "🏢 Proveedor / Opción",
-                    "Coste (€)": st.column_config.ProgressColumn(
-                        "Coste Mensual", format="%.2f €", min_value=0,
-                        max_value=float(df_comp["Coste (€)"].max()),
-                    ),
+                    "Coste (€)": st.column_config.NumberColumn("Coste Mensual", format="%.2f €"),
                     "Ahorro": st.column_config.NumberColumn(
                         "Diferencia vs Actual", format="%.2f €",
                         help="Valores positivos indican cuánto dinero ahorrarías."
