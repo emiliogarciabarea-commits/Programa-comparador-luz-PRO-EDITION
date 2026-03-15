@@ -201,18 +201,12 @@ else:
             st.divider()
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                # Pestaña 1
                 df_comp.to_excel(writer, index=False, sheet_name='Comparativa Mercado')
-                # Pestaña 2
                 df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Detalles Extraidos PDF')
-                # Pestaña 3
+                
                 resumen_exec = {
                     "Concepto": ["Mejor Opción", "Ahorro Mensual", "Ahorro Anual Estimado"],
-                    "Valor": [
-                        mejor['Compañía/Tarifa'] if not mejor_df.empty else "N/A",
-                        f"{mejor['Ahorro']} €" if not mejor_df.empty else "0 €",
-                        f"{round(ahorro_anual_val, 2)} €"
-                    ]
+                    "Valor": [nombre_mejor, f"{ahorro_mensual_mejor} €", f"{round(ahorro_anual_val, 2)} €"]
                 }
                 pd.DataFrame(resumen_exec).to_excel(writer, index=False, sheet_name='Resumen Ahorro')
 
