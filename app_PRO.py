@@ -162,23 +162,34 @@ else:
             df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
             df_comp = df_comp.sort_values(by=["Mes/Fecha", "Coste (€)"], ascending=[True, True])
 
-            st.subheader("📊 Comparativa de Mercado")
-            st.dataframe(
-                df_comp.drop(columns=['Dias_Factura'], errors='ignore'),
-                column_config={
-                    "Mes/Fecha": "📅 Período",
-                    "Compañía/Tarifa": "🏢 Proveedor / Opción",
-                    "Coste (€)": st.column_config.ProgressColumn(
-                        "Coste Mensual", format="%.2f €", min_value=0,
-                        max_value=float(df_comp["Coste (€)"].max()),
-                    ),
-                    "Ahorro": st.column_config.NumberColumn(
-                        "Diferencia vs Actual", format="%.2f €",
-                        help="Valores positivos indican cuánto dinero ahorrarías."
-                    )
-                },
-                hide_index=True,
-                use_container_width=True
+            # --- TABLA COMPARATIVA CON LÓGICA DE COLORES ---
+st.subheader("📊 Comparativa de Mercado")
+
+# Creamos una columna visual de estado para que el usuario vea el color rápido
+df_comp["Estado"] = df_comp["Ahorro"].apply(lambda x: "🟢 Ahorro" if x > 0 else ("⚪ Actual" if x == 0 else "🔴 Más caro"))
+
+st.dataframe(
+    df_comp.drop(columns=['Dias_Factura'], errors='ignore'),
+    column_config={
+        "Mes/Fecha": "📅 Período",
+        "Compañía/Tarifa": "🏢 Proveedor / Opción",
+        "Estado": st.column_config.TextColumn("Situación"), # Nueva columna visual
+        "Coste (€)": st.column_config.ProgressColumn(
+            "Coste Mensual", 
+            format="%.2f €", 
+            min_value=0,
+            max_value=float(df_comp["Coste (€)"].max()),
+            # Nota: El color aquí es global, por eso usamos la columna 'Estado' para el semáforo
+        ),
+        "Ahorro": st.column_config.NumberColumn(
+            "Diferencia vs Actual", 
+            format="%.2f €",
+            help="Verde = Ahorras dinero | Rojo = Pagarías más"
+        )
+    },
+    hide_index=True,
+    use_container_width=True
+)
             )
 
             # --- LÓGICA DE ESTIMACIÓN ANUAL ---
