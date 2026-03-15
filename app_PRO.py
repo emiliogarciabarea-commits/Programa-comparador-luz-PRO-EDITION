@@ -117,9 +117,8 @@ else:
             df_tarifas = pd.read_excel(excel_path)
             resultados_finales = []
 
-            # --- CÁLCULO DE COMPARATIVA POR CADA FACTURA Y COMPAÑÍA ---
             for _, fact in df_resumen_pdfs.iterrows():
-                # Añadimos la factura actual como referencia
+                # Añadimos la actual
                 resultados_finales.append({
                     "Mes/Fecha": fact['Fecha'],
                     "Compañía/Tarifa": "📍 TU FACTURA ACTUAL",
@@ -157,36 +156,27 @@ else:
 
             df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
             
-            # --- AGREGACIÓN PARA ENCONTRAR LA MEJOR COMPAÑÍA GLOBAL ---
-            # Filtramos la factura actual para el ranking de ahorro
+            # --- ORDENACIÓN: Primero por Fecha, luego por Ahorro (de mayor a menor) ---
+            df_comp = df_comp.sort_values(by=["Mes/Fecha", "Ahorro"], ascending=[True, False])
+
+            # --- RESUMEN DE AHORRO TOTAL ACUMULADO ---
             df_solo_ofertas = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"]
-            
-            # Agrupamos por compañía sumando todos los ahorros de los diferentes meses
-            resumen_por_compania = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
-            resumen_por_compania = resumen_por_compania.sort_values(by="Ahorro", ascending=False)
+            ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
+            ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
 
-            # --- RESULTADOS PRINCIPALES ---
-            if not resumen_por_compania.empty:
-                ganadora = resumen_por_compania.iloc[0]
-                mejor_cia = ganadora["Compañía/Tarifa"]
-                ahorro_total = round(ganadora["Ahorro"], 2)
-
-                st.subheader("🏆 Ganadora del Análisis")
+            if not ranking_total.empty:
+                ganadora = ranking_total.iloc[0]
+                st.subheader("🏆 Compañía con mayor ahorro acumulado")
                 col1, col2 = st.columns(2)
-                
                 with col1:
-                    st.success(f"### **{mejor_cia}**")
-                    st.write("Es la compañía más barata tras analizar todos los periodos.")
-                
+                    st.success(f"### **{ganadora['Compañía/Tarifa']}**")
                 with col2:
-                    st.metric(label="Ahorro Total Acumulado", value=f"{ahorro_total} €")
+                    st.metric(label="Ahorro Total (Todos los meses)", value=f"{round(ganadora['Ahorro'], 2)} €")
 
-                if ahorro_total <= 0:
-                    st.info("💡 Ninguna compañía del listado mejora tus facturas actuales en conjunto.")
-
-            # --- TABLA COMPARATIVA DETALLADA ---
+            # --- TABLA COMPARATIVA ---
             st.divider()
-            st.subheader("📊 Desglose por Mes y Tarifa")
+            st.subheader("📊 Comparativa Detallada (Ordenada por mejor opción)")
+            
             df_comp["Estado"] = df_comp["Ahorro"].apply(
                 lambda x: "🟢 Ahorro" if x > 0.01 else ("⚪ Actual" if abs(x) <= 0.01 else "🔴 Más caro")
             )
@@ -195,26 +185,24 @@ else:
                 df_comp.drop(columns=['Dias_Factura'], errors='ignore'),
                 column_config={
                     "Mes/Fecha": "📅 Período",
-                    "Compañía/Tarifa": "🏢 Proveedor / Opción",
-                    "Estado": st.column_config.TextColumn("Situación"),
-                    "Coste (€)": st.column_config.NumberColumn("Coste", format="%.2f €"),
-                    "Ahorro": st.column_config.NumberColumn("Diferencia vs Actual", format="%.2f €")
+                    "Compañía/Tarifa": "🏢 Proveedor",
+                    "Estado": "Situación",
+                    "Coste (€)": st.column_config.NumberColumn("Coste Estimado", format="%.2f €"),
+                    "Ahorro": st.column_config.NumberColumn("Ahorro vs Actual", format="%.2f €")
                 },
                 hide_index=True, use_container_width=True
             )
 
-            # --- EXPORTACIÓN ---
-            st.divider()
+            # --- EXCEL ---
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                df_comp.to_excel(writer, index=False, sheet_name='Detalle por Mes')
-                resumen_por_compania.to_excel(writer, index=False, sheet_name='Ranking Ahorro Total')
-                df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Extraidos')
+                df_comp.to_excel(writer, index=False, sheet_name='Detalle')
+                ranking_total.to_excel(writer, index=False, sheet_name='Ranking Global')
 
             st.download_button(
-                label="📥 Descargar Estudio Comparativo (Excel)",
+                label="📥 Descargar Informe Completo",
                 data=buffer_excel.getvalue(),
-                file_name="comparativa_energética_completa.xlsx",
+                file_name="estudio_ahorro.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
