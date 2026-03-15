@@ -12,22 +12,22 @@ def extraer_datos_factura(pdf_path):
         for pagina in pdf.pages:
             texto_completo += pagina.extract_text() + "\n"
 
-    # 1. Búsqueda de Consumos (Actualizado para El Corte Inglés)
+    # 1. Búsqueda de Consumos (Adaptada para El Corte Inglés y otros formatos)
     patrones_consumo = {
         'punta': [
             r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', 
             r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh',
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)' # Patrón para tabla ECI
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)' # Nueva regla: Fila Consumo, Columna Punta
         ],
         'llano': [
             r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', 
             r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh',
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+([\d,.]+)' # Patrón para tabla ECI
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+([\d,.]+)' # Nueva regla: Fila Consumo, Columna Llano
         ],
         'valle': [
             r'Consumo\s+en\s+P3:?\s*([\d,.]+)\s*kWh', 
             r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh',
-            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+[\d,.]+\s+([\d,.]+)' # Patrón para tabla ECI
+            r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+[\d,.]+\s+[\d,.]+\s+([\d,.]+)' # Nueva regla: Fila Consumo, Columna Valle
         ]
     }
     
@@ -40,11 +40,18 @@ def extraer_datos_factura(pdf_path):
                 consumos[tramo] = float(match.group(1).replace(',', '.'))
                 break
 
-    # 2. Búsqueda de Potencia (Actualizado para formato tabla ECI)
-    # Busca "Potencia contratada kW" y captura el primer valor numérico que le sigue (Punta)
-    patron_potencia = r'(?:Potencia\s+contratada(?:\s+en\s+punta-llano|\s+P1)?|Potencia\s+contratada\s+kW):\s*([\d,.]+)'
-    match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
-    potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
+    # 2. Búsqueda de Potencia (Adaptada para formato tabla: Fila Potencia contratada kW, Columna Punta)
+    patrones_potencia = [
+        r'(?:Potencia\s+contratada(?:\s+en\s+punta-llano|\s+P1)?):\s*([\d,.]+)\s*kW',
+        r'Potencia\s+contratada\s+kW\s+Punta\s+Valle\s+([\d,.]+)' # Nueva regla para formato tabla ECI
+    ]
+    
+    potencia = 0.0
+    for patron in patrones_potencia:
+        match_potencia = re.search(patron, texto_completo, re.IGNORECASE)
+        if match_potencia:
+            potencia = float(match_potencia.group(1).replace(',', '.'))
+            break
 
     # 3. Fecha y Días
     patron_fecha = r'(?:emitida\s+el|Fecha\s+de\s+emisión:)\s*([\d/]+\s*(?:de\s+\w+\s+de\s+)?\d{2,4})'
@@ -78,7 +85,7 @@ def extraer_datos_factura(pdf_path):
         total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
     return {
-        "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
+        "Fecha": fecha, "Días": d ias, "Potencia (kW)": potencia,
         "Consumo Punta (kWh)": consumos['punta'], "Consumo Llano (kWh)": consumos['llano'],
         "Consumo Valle (kWh)": consumos['valle'], "Excedente (kWh)": excedente,
         "Total Real": total_real
