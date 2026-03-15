@@ -27,7 +27,7 @@ def extraer_datos_factura(pdf_path):
             'valle': float(match_cons.group(3).replace(',', '.')) if match_cons else 0.0
         }
 
-        # 2. Búsqueda de Potencia (El Corte Inglés) [cite: 74, 87]
+        # 2. Búsqueda de Potencia (El Corte Inglés)
         patron_potencia = r'Potencia\s+contratada\s+kW\s+([\d,.]+)'
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
@@ -97,7 +97,6 @@ def extraer_datos_factura(pdf_path):
         "Total Real": total_real
     }
 
-# --- RESTO DEL CÓDIGO STREAMLIT PERMANECE IGUAL ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
@@ -156,7 +155,8 @@ else:
                             "Mes/Fecha": fact['Fecha'],
                             "Compañía/Tarifa": nombre_cia,
                             "Coste (€)": round(coste_estimado, 2),
-                            "Ahorro": round(ahorro, 2)
+                            "Ahorro": round(ahorro, 2),
+                            "Dias_Factura": fact['Días']
                         })
                     except: continue
 
@@ -165,7 +165,7 @@ else:
 
             st.subheader("📊 Comparativa de Mercado")
             st.dataframe(
-                df_comp,
+                df_comp.drop(columns=['Dias_Factura'], errors='ignore'),
                 column_config={
                     "Mes/Fecha": "📅 Período",
                     "Compañía/Tarifa": "🏢 Proveedor / Opción",
@@ -182,8 +182,13 @@ else:
                 use_container_width=True
             )
 
+            # --- LÓGICA DE ESTIMACIÓN ANUAL ---
             mejor = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"].iloc[0]
             if mejor["Ahorro"] > 0:
-                st.success(f"💡 **Oportunidad de Ahorro:** Cambiándote a **{mejor['Compañía/Tarifa']}** podrías ahorrar **{mejor['Ahorro']} €** en este recibo.")
+                # Calculamos el ahorro anual proyectado: (Ahorro / Días Factura) * 365
+                ahorro_anual = (mejor["Ahorro"] / mejor["Dias_Factura"]) * 365 if mejor["Dias_Factura"] > 0 else 0
+                
+                st.success(f"💡 **Oportunidad de Ahorro:** Cambiándote a **{mejor['Compañía/Tarifa']}** ahorrarías **{mejor['Ahorro']} €** en este recibo.")
+                st.metric(label="Estimado de Ahorro Anual", value=f"{round(ahorro_anual, 2)} €")
             else:
                 st.info("✅ Tu tarifa actual parece ser la más competitiva por ahora.")
