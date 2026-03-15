@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 import io
 import os
+from fpdf import FPDF  # Necesitarás instalarlo: pip install fpdf
 
 def extraer_datos_factura(pdf_path):
     texto_completo = ""
@@ -77,6 +78,39 @@ def extraer_datos_factura(pdf_path):
         "Total Real": total_real
     }
 
+def generar_pdf(resumen_df, mejor_opcion, ahorro_anual):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(200, 10, txt="Informe de Comparativa Energética", ln=True, align='C')
+    pdf.ln(10)
+    
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(200, 10, txt="Resumen de Ahorro Acumulado:", ln=True)
+    
+    pdf.set_font("Arial", '', 10)
+    # Encabezados de tabla
+    pdf.cell(80, 10, "Compania/Tarifa", 1)
+    pdf.cell(50, 10, "Coste Total (E)", 1)
+    pdf.cell(50, 10, "Ahorro Total (E)", 1)
+    pdf.ln()
+    
+    for _, row in resumen_df.iterrows():
+        pdf.cell(80, 10, str(row['Compañía/Tarifa']), 1)
+        pdf.cell(50, 10, f"{row['Coste (€)']:.2f}", 1)
+        pdf.cell(50, 10, f"{row['Ahorro']:.2f}", 1)
+        pdf.ln()
+    
+    pdf.ln(10)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(200, 10, txt=f"RECOMENDACION PRINCIPAL:", ln=True)
+    pdf.set_font("Arial", '', 11)
+    pdf.multi_cell(0, 10, txt=f"La mejor opcion es {mejor_opcion['Compañía/Tarifa']}.\n"
+                               f"Ahorro total en facturas analizadas: {mejor_opcion['Ahorro']:.2f} E.\n"
+                               f"PROYECCION DE AHORRO ANUAL: {ahorro_anual:.2f} E.")
+    
+    return pdf.output(dest='S').encode('latin-1')
+
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
@@ -85,7 +119,7 @@ excel_path = "tarifas_companias.xlsx"
 if not os.path.exists(excel_path):
     st.error(f"No se encuentra el archivo '{excel_path}' en el repositorio.")
 else:
-    uploaded_files = st.file_uploader("Sube tus facturas PDF (puedes subir varias)", type="pdf", accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Sube tus facturas PDF", type="pdf", accept_multiple_files=True)
 
     if uploaded_files:
         datos_facturas = []
@@ -101,10 +135,8 @@ else:
             df_resumen_pdfs = pd.DataFrame(datos_facturas)
             df_tarifas = pd.read_excel(excel_path)
             
-            # Cálculo de resultados
             resultados_finales = []
             for _, fact in df_resumen_pdfs.iterrows():
-                # Añadir la factura actual del usuario
                 resultados_finales.append({
                     "Mes/Fecha": fact['Fecha'],
                     "Compañía/Tarifa": "📍 TU FACTURA ACTUAL",
@@ -139,40 +171,30 @@ else:
 
             df_comp = pd.DataFrame(resultados_finales)
 
-            # --- TABLA RESUMEN AGREGADA (POR COMPAÑÍA) ---
             st.subheader("📋 Resumen Total Acumulado")
-            # Agrupamos por compañía para ver el ahorro total de todas las facturas subidas
             resumen_agrupado = df_comp.groupby("Compañía/Tarifa").agg({
-                "Coste (€)": "sum",
-                "Ahorro": "sum",
-                "Días": "sum"
+                "Coste (€)": "sum", "Ahorro": "sum", "Días": "sum"
             }).reset_index().sort_values("Coste (€)")
 
             st.dataframe(resumen_agrupado[["Compañía/Tarifa", "Coste (€)", "Ahorro"]], use_container_width=True, hide_index=True)
 
-            # --- LÓGICA DE AHORRO Y ESTIMACIÓN ANUAL ---
             mejor_opcion = resumen_agrupado[resumen_agrupado["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"].iloc[0]
+            ahorro_anual = 0
             
             if mejor_opcion["Ahorro"] > 0:
-                dias_totales = mejor_opcion["Días"]
-                ahorro_total = mejor_opcion["Ahorro"]
-                # Proyección anual: (Ahorro total / Días totales analizados) * 365
-                estimado_anual = (ahorro_total / dias_totales) * 365 if dias_totales > 0 else 0
+                ahorro_anual = (mejor_opcion["Ahorro"] / mejor_opcion["Días"]) * 365 if mejor_opcion["Días"] > 0 else 0
+                st.success(f"💡 **Oportunidad Detectada:** Con **{mejor_opcion['Compañía/Tarifa']}** habrías ahorrado **{round(mejor_opcion['Ahorro'], 2)} €**.")
+                st.metric(label="Ahorro Estimado Anual", value=f"{round(ahorro_anual, 2)} €")
                 
-                st.success(f"💡 **Oportunidad Detectada:** Con la compañía **{mejor_opcion['Compañía/Tarifa']}** habrías ahorrado un total de **{round(ahorro_total, 2)} €** en las facturas subidas.")
-                st.metric(label="Ahorro Estimado Anual (Proyección)", value=f"{round(estimado_anual, 2)} €")
+                # Botón de exportación PDF
+                pdf_bytes = generar_pdf(resumen_agrupado, mejor_opcion, ahorro_anual)
+                st.download_button(label="📥 Descargar Reporte en PDF", 
+                                   data=pdf_bytes, 
+                                   file_name="comparativa_energetica.pdf", 
+                                   mime="application/pdf")
             else:
                 st.info("✅ Tus facturas actuales parecen estar en la mejor tarifa disponible.")
 
-            # --- BOTÓN PARA MOSTRAR TABLA DETALLADA ---
             if st.button("Ver desglose detallado por factura"):
                 st.subheader("🔍 Detalle por Período y Factura")
-                st.dataframe(
-                    df_comp.sort_values(["Mes/Fecha", "Coste (€)"]),
-                    column_config={
-                        "Coste (€)": st.column_config.NumberColumn("Coste en Período", format="%.2f €"),
-                        "Ahorro": st.column_config.NumberColumn("Ahorro en Período", format="%.2f €")
-                    },
-                    use_container_width=True,
-                    hide_index=True
-                )
+                st.dataframe(df_comp.sort_values(["Mes/Fecha", "Coste (€)"]), use_container_width=True, hide_index=True)
