@@ -103,14 +103,16 @@ def extraer_datos_factura(pdf_path):
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
 
-        # --- CORRECCIÓN ESPECÍFICA PARA NATURGY (DÍAS) ---
-        match_bono = re.search(r'Financiación\s+Bono\s+Social:?\s*(\d+)\s*días', texto_completo, re.IGNORECASE)
-        if match_bono:
-            dias = int(match_bono.group(1))
+        # --- CORRECCIÓN ESPECÍFICA PARA NATURGY / OTROS ---
+        patron_dias_bono = r'Financiación\s+Bono\s+Social.*?(\d+)\s+días'
+        match_dias_bono = re.search(patron_dias_bono, texto_completo, re.IGNORECASE | re.DOTALL)
+        
+        if match_dias_bono:
+            dias = int(match_dias_bono.group(1))
         else:
-            patron_dias = r'(\d+)\s*días'
-            match_dias = re.search(patron_dias, texto_completo)
-            dias = int(match_dias.group(1)) if match_dias else 0
+            patron_dias_gen = r'(\d+)\s*días'
+            match_dias_gen = re.search(patron_dias_gen, texto_completo)
+            dias = int(match_dias_gen.group(1)) if match_dias_gen else 0
 
         patron_excedente = r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh'
         match_excedente = re.search(patron_excedente, texto_completo, re.IGNORECASE)
