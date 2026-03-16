@@ -43,39 +43,39 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_iberdrola:
-        # Potencia: Potencia punta en kW
-        m_pot = re.search(r'Potencia\s+punta:\s*([\d,.]+)\s*kW', texto_completo)
-        potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
+        # Potencia Punta
+        match_pot = re.search(r'Potencia\s+punta:\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
+        potencia = float(match_pot.group(1).replace(',', '.')) if match_pot else 0.0
 
-        # Días: busca el numero justo antes de la palabra "Dias" en la fila "Potencia facturada"
-        m_dias = re.search(r'(\d+)\s*días\s*x\s*[\d,.]+\s*€/kW\s*dia', texto_completo, re.IGNORECASE)
-        dias = int(m_dias.group(1)) if m_dias else 0
+        # Días (número antes de "días" en la sección de potencia facturada)
+        match_dias = re.search(r'(\d+)\s+días\s+x\s+[\d,.]+\s+€/kW\s+dia', texto_completo)
+        dias = int(match_dias.group(1)) if match_dias else 0
 
-        # Fecha: PERIODO DE FACTURACION (la fecha más alta/final)
-        m_fecha = re.search(r'PERIODO\s+DE\s+FACTURACIÓN:\s*[\d/]+\s*-\s*([\d/]+)', texto_completo, re.IGNORECASE)
-        fecha = m_fecha.group(1) if m_fecha else "No encontrada"
+        # Fecha (la segunda/más alta del periodo de facturación)
+        match_periodo = re.search(r'PERIODO\s+DE\s+FACTURACIÓN:\s*[\d/]+\s*-\s*([\d/]+)', texto_completo, re.IGNORECASE)
+        fecha = match_periodo.group(1) if match_periodo else "No encontrada"
 
-        # Energia Consumida: Punta, Llano y Valle en kWh
-        m_p = re.search(r'Punta\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_l = re.search(r'Llano\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_v = re.search(r'Valle\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        # Energía Consumida por tramos
+        m_punta = re.search(r'Punta\s+([\d,.]+)\s*kWh', texto_completo)
+        m_llano = re.search(r'Llano\s+([\d,.]+)\s*kWh', texto_completo)
+        m_valle = re.search(r'Valle\s+([\d,.]+)\s*kWh', texto_completo)
         
         consumos = {
-            'punta': float(m_p.group(1).replace(',', '.')) if m_p else 0.0,
-            'llano': float(m_l.group(1).replace(',', '.')) if m_l else 0.0,
-            'valle': float(m_v.group(1).replace(',', '.')) if m_v else 0.0
+            'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
+            'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
+            'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
 
-        # Total Real: TOTAL ENERGIA - Impuesto sobre electricidad - Financiacion bono social fijo
-        m_te = re.search(r'TOTAL\s+ENERGÍA\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_ie = re.search(r'Impuesto\s+sobre\s+electricidad.*?([\d,.]+)\s*€', texto_completo, re.DOTALL | re.IGNORECASE)
-        m_bs = re.search(r'Financiación\s+bono\s+social\s+fijo.*?([\d,.]+)\s*€', texto_completo, re.DOTALL | re.IGNORECASE)
+        # Total Real (Total Energía - Impuesto - Bono Social)
+        m_total_ene = re.search(r'TOTAL\s+ENERGÍA\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_impuesto = re.search(r'Impuesto\s+sobre\s+electricidad\s*[\d,.]+%?\s*/?\s*[\d,.]+\s*€\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_bono = re.search(r'Financiación\s+bono\s+social\s+fijo\s*[\d\sxdías,.]+\s*€\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
 
-        val_te = float(m_te.group(1).replace(',', '.')) if m_te else 0.0
-        val_ie = float(m_ie.group(1).replace(',', '.')) if m_ie else 0.0
-        val_bs = float(m_bs.group(1).replace(',', '.')) if m_bs else 0.0
+        val_total = float(m_total_ene.group(1).replace(',', '.')) if m_total_ene else 0.0
+        val_imp = float(m_impuesto.group(1).replace(',', '.')) if m_impuesto else 0.0
+        val_bono = float(m_bono.group(1).replace(',', '.')) if m_bono else 0.0
         
-        total_real = val_te - val_ie - val_bs
+        total_real = val_total - val_imp - val_bono
         excedente = 0.0
 
     else:
