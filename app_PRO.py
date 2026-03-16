@@ -43,19 +43,19 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_iberdrola:
-        # Potencia Punta
+        # Potencia: Potencia punta: 4,4 kW
         m_pot = re.search(r'Potencia\s+punta:\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # Días facturados
+        # Dias: Numero debajo de "DIAS FACTURADOS:"
         m_dias = re.search(r'DIAS\s+FACTURADOS:\s*(\d+)', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
 
-        # Fecha de emisión
-        m_fecha = re.search(r'FECHA\s+DE\s+EMISIÓN:\s*([\d/]+\s*de\s*\w+\s*de\s*\d{4}|[\d/]+)', texto_completo, re.IGNORECASE)
+        # Fecha: Debajo de "FECHA DE EMISIÓN:"
+        m_fecha = re.search(r'FECHA\s+DE\s+EMISIÓN:\s*([\d]+\s+de\s+\w+\s+de\s+\d{4})', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
 
-        # Energía consumida (Punta, Llano, Valle)
+        # Consumos: Energía consumida Punta, Llano y Valle
         consumos = {
             'punta': 0.0, 'llano': 0.0, 'valle': 0.0
         }
@@ -67,14 +67,13 @@ def extraer_datos_factura(pdf_path):
         if m_l: consumos['llano'] = float(m_l.group(1).replace(',', '.'))
         if m_v: consumos['valle'] = float(m_v.group(1).replace(',', '.'))
 
-        # Total Real (Total Energía - Impuesto Electricidad - Bono Social)
-        # Buscamos los valores específicos en el texto
-        m_tot_ene = re.search(r'TOTAL\s+ENERGÍA\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_imp_ele = re.search(r'Impuesto\s+sobre\s+electricidad.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
-        m_bono = re.search(r'Financiación\s+bono\s+social.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
-        
-        val_ene = float(m_tot_ene.group(1).replace(',', '.')) if m_tot_ene else 0.0
-        val_imp = float(m_imp_ele.group(1).replace(',', '.')) if m_imp_ele else 0.0
+        # Total Real: Total Energía - Impuesto electricidad - Bono social
+        m_t_ene = re.search(r'TOTAL\s+ENERGÍA\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_imp = re.search(r'Impuesto\s+sobre\s+electricidad.*?([\d,.]+)\s*€', texto_completo, re.DOTALL | re.IGNORECASE)
+        m_bono = re.search(r'Financiación\s+bono\s+social.*?([\d,.]+)\s*€', texto_completo, re.DOTALL | re.IGNORECASE)
+
+        val_ene = float(m_t_ene.group(1).replace(',', '.')) if m_t_ene else 0.0
+        val_imp = float(m_imp.group(1).replace(',', '.')) if m_imp else 0.0
         val_bono = float(m_bono.group(1).replace(',', '.')) if m_bono else 0.0
         
         total_real = val_ene - val_imp - val_bono
@@ -128,6 +127,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": total_real
     }
 
+# El resto del código Streamlit permanece igual
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
@@ -193,11 +193,8 @@ else:
                     except: continue
 
             df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
-            
-            # --- ORDENACIÓN: Mes y Ahorro de Mayor a Menor ---
             df_comp = df_comp.sort_values(by=["Mes/Fecha", "Ahorro"], ascending=[True, False])
 
-            # --- LÓGICA DE GANADORA ---
             df_solo_ofertas = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"]
             ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
             ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
@@ -206,7 +203,6 @@ else:
             
             if not ranking_total.empty:
                 mejor_opcion = ranking_total.iloc[0]
-                
                 if mejor_opcion['Ahorro'] > 0.01:
                     st.subheader("🏆 Resultado del Análisis")
                     c1, c2 = st.columns(2)
@@ -215,9 +211,8 @@ else:
                     with c2:
                         st.metric(label="Ahorro Total Acumulado", value=f"{round(mejor_opcion['Ahorro'], 2)} €")
                 else:
-                    st.info("✅ **Tu compañía actual parece ser la más económica.** Ninguna de las tarifas analizadas mejora tus costes actuales en el total de los periodos subidos.")
+                    st.info("✅ **Tu compañía actual parece ser la más económica.**")
 
-            # --- TABLA DETALLADA ---
             st.subheader("📊 Comparativa Detallada por Factura")
             df_comp["Estado"] = df_comp["Ahorro"].apply(
                 lambda x: "🟢 Ahorro" if x > 0.01 else ("⚪ Actual" if abs(x) <= 0.01 else "🔴 Más caro")
@@ -234,7 +229,6 @@ else:
                 hide_index=True, use_container_width=True
             )
 
-            # --- EXPORTACIÓN ---
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle')
