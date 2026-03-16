@@ -12,13 +12,13 @@ def generar_pdf_ahorro(df_resumen, df_comparativo, mejor_cia, ahorro_anual):
     
     # Configuración de página y título
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, "INFORME DE AHORRO ENERGÉTICO", ln=True, align='C')
+    pdf.cell(0, 10, "INFORME DE AHORRO ENERGETICO", ln=True, align='C')
     pdf.ln(5)
     
     # 1. DATOS LEÍDOS DE LAS FACTURAS
     pdf.set_font("Arial", 'B', 12)
     pdf.set_fill_color(240, 240, 240)
-    pdf.cell(0, 10, "1. Datos extraídos de tus facturas", ln=True, fill=True)
+    pdf.cell(0, 10, "1. Datos extraidos de tus facturas", ln=True, fill=True)
     pdf.ln(2)
     
     pdf.set_font("Arial", 'B', 9)
@@ -53,7 +53,6 @@ def generar_pdf_ahorro(df_resumen, df_comparativo, mejor_cia, ahorro_anual):
     pdf.cell(40, 8, "Ahorro", 1, ln=True)
     
     pdf.set_font("Arial", '', 9)
-    # Filtrar solo la mejor compañía para la tabla de ahorro mensual
     df_mejor = df_comparativo[df_comparativo["Compañía/Tarifa"] == mejor_cia]
     
     for _, fila in df_mejor.iterrows():
@@ -71,7 +70,7 @@ def generar_pdf_ahorro(df_resumen, df_comparativo, mejor_cia, ahorro_anual):
     # 3. TOTALES ANUALES
     pdf.set_fill_color(200, 255, 200)
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(0, 15, f"ESTIMACIÓN DE AHORRO ANUAL: {round(ahorro_anual, 2)} Euros", 1, ln=True, align='C', fill=True)
+    pdf.cell(0, 15, f"ESTIMACION DE AHORRO ANUAL: {round(ahorro_anual, 2)} \x80", 1, ln=True, align='C', fill=True)
     
     return pdf.output(dest='S').encode('latin-1')
 
@@ -228,13 +227,18 @@ else:
                     with c1:
                         st.success(f"Mejor opción: **{mejor_opcion_res['Compañía/Tarifa']}**")
                     with c2:
-                        st.metric(label="Ahorro Total en facturas subidas", value=f"{round(mejor_opcion_res['Ahorro'], 2)} €")
+                        st.metric(label="Ahorro Total Detectado", value=f"{round(mejor_opcion_res['Ahorro'], 2)} €")
                     with c3:
                         dias_totales = df_resumen_pdfs['Días'].sum()
                         ahorro_anual_est = (mejor_opcion_res['Ahorro'] / dias_totales) * 365 if dias_totales > 0 else 0
                         st.metric(label="Estimado Ahorro Anual", value=f"{round(ahorro_anual_est, 2)} €")
                     
-                    # Generación de PDF con todos los datos solicitados
+                    # --- GRÁFICA DE AHORRO ---
+                    st.subheader(f"📈 Evolución del Ahorro Mensual con {mejor_opcion_res['Compañía/Tarifa']}")
+                    df_grafica = df_solo_ofertas[df_solo_ofertas["Compañía/Tarifa"] == mejor_opcion_res['Compañía/Tarifa']]
+                    st.line_chart(df_grafica, x="Mes/Fecha", y="Ahorro")
+
+                    # Generación de PDF
                     pdf_bytes = generar_pdf_ahorro(
                         df_resumen_pdfs, 
                         df_comp, 
