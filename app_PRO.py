@@ -210,7 +210,11 @@ else:
                     except: continue
 
             df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
-            df_comp = df_comp.sort_values(by=["Mes/Fecha", "Ahorro"], ascending=[True, False])
+            
+            # --- LOGICA DE ORDENACION POR FECHA ---
+            # Intentamos convertir a fecha para ordenar cronológicamente la gráfica y tabla
+            df_comp['Fecha_Orden'] = pd.to_datetime(df_comp['Mes/Fecha'], errors='coerce', dayfirst=True)
+            df_comp = df_comp.sort_values(by=["Fecha_Orden", "Ahorro"], ascending=[True, False])
 
             df_solo_ofertas = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"]
             ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
@@ -233,9 +237,11 @@ else:
                         ahorro_anual_est = (mejor_opcion_res['Ahorro'] / dias_totales) * 365 if dias_totales > 0 else 0
                         st.metric(label="Estimado Ahorro Anual", value=f"{round(ahorro_anual_est, 2)} €")
                     
-                    # --- GRÁFICA DE AHORRO ---
+                    # --- GRÁFICA DE AHORRO ORDENADA ---
                     st.subheader(f"📈 Evolución del Ahorro Mensual con {mejor_opcion_res['Compañía/Tarifa']}")
-                    df_grafica = df_solo_ofertas[df_solo_ofertas["Compañía/Tarifa"] == mejor_opcion_res['Compañía/Tarifa']]
+                    df_grafica = df_solo_ofertas[df_solo_ofertas["Compañía/Tarifa"] == mejor_opcion_res['Compañía/Tarifa']].copy()
+                    
+                    # Graficamos usando el orden cronológico establecido
                     st.line_chart(df_grafica, x="Mes/Fecha", y="Ahorro")
 
                     # Generación de PDF
@@ -258,7 +264,7 @@ else:
 
             st.subheader("📊 Comparativa Detallada por Factura")
             st.dataframe(
-                df_comp.drop(columns=['Dias_Factura'], errors='ignore'),
+                df_comp.drop(columns=['Dias_Factura', 'Fecha_Orden'], errors='ignore'),
                 column_config={
                     "Mes/Fecha": "📅 Periodo",
                     "Compañía/Tarifa": "🏢 Proveedor",
