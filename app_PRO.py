@@ -43,23 +43,22 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_iberdrola:
-        # 1. Potencia Punta [cite: 1, 16]
+        # 1. Potencia Punta
         patron_potencia = r'Potencia\s+punta:\s*([\d,.]+)\s*kW'
         match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
 
-        # 2. Días: número antes de "días" en la línea de potencia [cite: 74]
-        # Buscamos específicamente el patrón "X días x" que aparece en el detalle
+        # 2. Días: número antes de "días" en la línea de Potencia facturada
         patron_dias = r'(\d+)\s*días\s*x'
         match_dias = re.search(patron_dias, texto_completo, re.IGNORECASE)
         dias = int(match_dias.group(1)) if match_dias else 0
 
-        # 3. Fecha: Periodo más alto (el segundo) de PERIODO DE FACTURACIÓN [cite: 20]
+        # 3. Fecha: El periodo más alto (final) de PERIODO DE FACTURACIÓN
         patron_periodo = r'PERIODO\s+DE\s+FACTURACIÓN:\s*[\d/]+\s*-\s*([\d/]+)'
         match_periodo = re.search(patron_periodo, texto_completo, re.IGNORECASE)
         fecha = match_periodo.group(1) if match_periodo else "No encontrada"
 
-        # 4. Energía Consumida (Punta, Llano, Valle) [cite: 57, 58, 71]
+        # 4. Energía Consumida (kWh)
         p_punta = r'Punta\s*([\d,.]+)\s*kWh'
         p_llano = r'Llano\s*([\d,.]+)\s*kWh'
         p_valle = r'Valle\s*([\d,.]+)\s*kWh'
@@ -74,18 +73,15 @@ def extraer_datos_factura(pdf_path):
             'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
 
-        # 5. Total Real: TOTAL ENERGÍA - Impuesto - Bono social [cite: 74]
-        # Buscamos "TOTAL ENERGÍA" y luego los valores a restar
-        m_total_ene = re.search(r'TOTAL\s+ENERGÍA\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_impuesto = re.search(r'Impuesto\s+sobre\s+electricidad\s*[\d,.]+%?\s*/?[\d,.]*\s*€?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_bono = re.search(r'Financiación\s+bono\s+social\s+fijo\s*.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        # 5. Total Real: Suma de importe potencia + importe energía (€)
+        # Buscamos los valores en € de las dos secciones principales
+        m_imp_potencia = re.search(r'Total\s+importe\s+potencia\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_imp_energia = re.search(r'Total\s+[\d,.]+\s*kWh\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
 
-        val_total_ene = float(m_total_ene.group(1).replace(',', '.')) if m_total_ene else 0.0
-        val_impuesto = float(m_impuesto.group(1).replace(',', '.')) if m_impuesto else 0.0
-        val_bono = float(m_bono.group(1).replace(',', '.')) if m_bono else 0.0
+        val_pot = float(m_imp_potencia.group(1).replace(',', '.')) if m_imp_potencia else 0.0
+        val_ene = float(m_imp_energia.group(1).replace(',', '.')) if m_imp_energia else 0.0
         
-        # Restamos los valores según tu instrucción
-        total_real = val_total_ene - val_impuesto - val_bono
+        total_real = val_pot + val_ene
         excedente = 0.0
 
     else:
@@ -136,7 +132,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# El resto del código de Streamlit permanece igual...
+# El resto del código Streamlit (st.set_page_config, file_uploader, etc.) sigue exactamente igual
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
@@ -203,7 +199,7 @@ else:
 
             df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
             
-            # --- ORDENACIÓN: Mes y Ahorro de Mayor a Menor ---
+            # --- ORDENACIÓN ---
             df_comp = df_comp.sort_values(by=["Mes/Fecha", "Ahorro"], ascending=[True, False])
 
             # --- LÓGICA DE GANADORA ---
@@ -224,7 +220,7 @@ else:
                     with c2:
                         st.metric(label="Ahorro Total Acumulado", value=f"{round(mejor_opcion['Ahorro'], 2)} €")
                 else:
-                    st.info("✅ **Tu compañía actual parece ser la más económica.** Ninguna de las tarifas analizadas mejora tus costes actuales en el total de los periodos subidos.")
+                    st.info("✅ **Tu compañía actual parece ser la más económica.**")
 
             # --- TABLA DETALLADA ---
             st.subheader("📊 Comparativa Detallada por Factura")
