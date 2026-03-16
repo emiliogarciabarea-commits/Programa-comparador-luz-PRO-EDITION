@@ -149,8 +149,11 @@ else:
 
         if datos_facturas:
             df_resumen_pdfs = pd.DataFrame(datos_facturas)
-            with st.expander("🔍 Ver detalles de datos extraídos"):
-                st.dataframe(df_resumen_pdfs, use_container_width=True)
+            
+            # --- SECCIÓN EDITABLE ---
+            with st.expander("🔍 Ver y corregir datos extraídos", expanded=True):
+                st.info("💡 Puedes hacer doble clic en cualquier celda para corregir los datos manualmente.")
+                df_resumen_pdfs = st.data_editor(df_resumen_pdfs, use_container_width=True, hide_index=True)
 
             df_tarifas = pd.read_excel(excel_path)
             resultados_finales = []
