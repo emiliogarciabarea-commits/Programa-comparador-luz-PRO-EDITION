@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 import io
 import os
+from datetime import datetime
 
 def extraer_datos_factura(pdf_path):
     texto_completo = ""
@@ -13,7 +14,6 @@ def extraer_datos_factura(pdf_path):
 
     # --- DETECCIÓN DE TIPO DE FACTURA ---
     es_el_corte_ingles = re.search(r'Energía\s+El\s+Corte\s+Inglés|TELECOR', texto_completo, re.IGNORECASE)
-    # Detección específica para Iberdrola
     es_iberdrola = re.search(r'IBERDROLA\s+CLIENTES', texto_completo, re.IGNORECASE)
 
     if es_el_corte_ingles:
@@ -44,24 +44,32 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_iberdrola:
-        # 1. Potencia (Potencia Punta)
+        # 1. Potencia Punta
         patron_potencia = r'Potencia\s+punta:\s*([\d,.]+)\s*kW'
         match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
 
-        # 2. Días: Número justo antes de "Días" en la fila "Potencia facturada"
-        # Ejemplo: "Punta 4,4 kW x 27 días x ..."
+        # 2. Días: número antes de "días" en la fila "Potencia facturada"
         patron_dias = r'Potencia\s+facturada.*?(\d+)\s+días'
         match_dias = re.search(patron_dias, texto_completo, re.IGNORECASE | re.DOTALL)
         dias = int(match_dias.group(1)) if match_dias else 0
 
-        # 3. Fecha: "PERIODO DE FACTURACIÓN" es la fecha más alta (la segunda)
-        # Ejemplo: "20/01/26 - 16/02/26"
-        patron_periodo = r'PERIODO\s+DE\s+FACTURACIÓN:?\s*[\d/]+\s*-\s*([\d/]+)'
-        match_periodo = re.search(patron_periodo, texto_completo, re.IGNORECASE)
-        fecha = match_periodo.group(1) if match_periodo else "No encontrada"
+        # 3. Fecha: Buscar el valor más alto del formato XX/XX/XX o XX/XX/XXXX
+        todas_las_fechas = re.findall(r'\b\d{2}/\d{2}/\d{2,4}\b', texto_completo)
+        if todas_las_fechas:
+            # Convertimos a objeto datetime para comparar y encontrar la más alta
+            fechas_objetos = []
+            for f in todas_las_fechas:
+                try:
+                    # Intentamos con año de 4 cifras primero, luego de 2
+                    fmt = '%d/%m/%Y' if len(f.split('/')[-1]) == 4 else '%d/%m/%y'
+                    fechas_objetos.append(datetime.strptime(f, fmt))
+                except: continue
+            fecha = max(fechas_objetos).strftime('%d/%m/%y') if fechas_objetos else "No encontrada"
+        else:
+            fecha = "No encontrada"
 
-        # 4. Energía Consumida (Punta, Llano, Valle)
+        # 4. Energía Consumida
         m_punta = re.search(r'Punta\s*([\d,.]+)\s*kWh', texto_completo)
         m_llano = re.search(r'Llano\s*([\d,.]+)\s*kWh', texto_completo)
         m_valle = re.search(r'Valle\s*([\d,.]+)\s*kWh', texto_completo)
@@ -130,7 +138,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# --- RESTO DEL CÓDIGO STREAMLIT (SIN CAMBIOS) ---
+# El resto del código Streamlit se mantiene exactamente igual...
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
