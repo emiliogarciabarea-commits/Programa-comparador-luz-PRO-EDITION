@@ -43,19 +43,22 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_iberdrola:
-        # Potencia punta
-        match_pot = re.search(r'Potencia\s+punta:\s*([\d,.]+)\s*kW', texto_completo)
-        potencia = float(match_pot.group(1).replace(',', '.')) if match_pot else 0.0
+        # Potencia: "Potencia punta"
+        patron_potencia = r'Potencia\s+punta:\s*([\d,.]+)\s*kW'
+        match_potencia = re.search(patron_potencia, texto_completo)
+        potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
 
-        # Días (número antes de la palabra días en la fila Potencia facturada)
-        match_dias = re.search(r'Potencia\s+facturada\s+Punta\s+[\d,.]+\s+kW\s+x\s+(\d+)\s+días', texto_completo)
+        # Dias: Numero antes de la palabra "días" en la fila de potencia facturada
+        patron_dias = r'(\d+)\s+días\s+x\s+[\d,.]+\s*€/kW\s+dia'
+        match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
 
-        # Fecha de emisión (texto debajo del título)
-        match_fecha = re.search(r'FECHA\s+DE\s+EMISIÓN:\s*\n?\s*([\d]+\s+de\s+\w+\s+de\s+\d{4})', texto_completo, re.IGNORECASE)
+        # Fecha: "FECHA DE EMISIÓN"
+        patron_fecha = r'FECHA\s+DE\s+EMISIÓN:\s*\n?\s*([\d]+\s+de\s+\w+\s+de\s+\d{4})'
+        match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
 
-        # Energía Consumida
+        # Energia Consumida: Punta, Llano y Valle en kWh
         consumos = {
             'punta': 0.0,
             'llano': 0.0,
@@ -69,10 +72,10 @@ def extraer_datos_factura(pdf_path):
         if m_llano: consumos['llano'] = float(m_llano.group(1).replace(',', '.'))
         if m_valle: consumos['valle'] = float(m_valle.group(1).replace(',', '.'))
 
-        # Total Real = TOTAL ENERGIA - Impuesto electricidad - Financiacion bono social
+        # Total Real: TOTAL ENERGÍA - Impuesto electricidad - financiación bono social
         m_total_ene = re.search(r'TOTAL\s+ENERGÍA\s*([\d,.]+)\s*€', texto_completo)
-        m_impuesto = re.search(r'Impuesto\s+sobre\s+electricidad\s*[\d,.]*%\s*/[\d,.]+\s*€\s*([\d,.]+)\s*€', texto_completo)
-        m_bono = re.search(r'Financiación\s+bono\s+social\s+fijo\s*.*?\s*([\d,.]+)\s*€', texto_completo)
+        m_impuesto = re.search(r'Impuesto\s+sobre\s+electricidad.*?([\d,.]+)\s*€', texto_completo, re.DOTALL)
+        m_bono = re.search(r'Financiación\s+bono\s+social.*?([\d,.]+)\s*€', texto_completo, re.DOTALL)
 
         val_total_ene = float(m_total_ene.group(1).replace(',', '.')) if m_total_ene else 0.0
         val_impuesto = float(m_impuesto.group(1).replace(',', '.')) if m_impuesto else 0.0
@@ -195,10 +198,8 @@ else:
 
             df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
             
-            # --- ORDENACIÓN: Mes y Ahorro de Mayor a Menor ---
             df_comp = df_comp.sort_values(by=["Mes/Fecha", "Ahorro"], ascending=[True, False])
 
-            # --- LÓGICA DE GANADORA ---
             df_solo_ofertas = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"]
             ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
             ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
@@ -218,7 +219,6 @@ else:
                 else:
                     st.info("✅ **Tu compañía actual parece ser la más económica.** Ninguna de las tarifas analizadas mejora tus costes actuales en el total de los periodos subidos.")
 
-            # --- TABLA DETALLADA ---
             st.subheader("📊 Comparativa Detallada por Factura")
             df_comp["Estado"] = df_comp["Ahorro"].apply(
                 lambda x: "🟢 Ahorro" if x > 0.01 else ("⚪ Actual" if abs(x) <= 0.01 else "🔴 Más caro")
@@ -235,7 +235,6 @@ else:
                 hide_index=True, use_container_width=True
             )
 
-            # --- EXPORTACIÓN ---
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle')
