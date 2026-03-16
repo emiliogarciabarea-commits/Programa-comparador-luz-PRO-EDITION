@@ -13,7 +13,7 @@ def extraer_datos_factura(pdf_path):
 
     # --- DETECCIÓN DE TIPO DE FACTURA ---
     es_el_corte_ingles = re.search(r'Energía\s+El\s+Corte\s+Inglés|TELECOR', texto_completo, re.IGNORECASE)
-    es_iberdrola = re.search(r'IBERDROLA', texto_completo, re.IGNORECASE)
+    es_iberdrola = re.search(r'IBERDROLA\s+CLIENTES', texto_completo, re.IGNORECASE)
 
     if es_el_corte_ingles:
         patron_cons_eci = r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)'
@@ -43,32 +43,31 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_iberdrola:
-        # --- LÓGICA ESPECÍFICA IBERDROLA ---
-        # Potencia punta
-        match_pot = re.search(r'Potencia\s+punta:\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
-        potencia = float(match_pot.group(1).replace(',', '.')) if match_pot {cite: 179} else 0.0
-
-        # Días facturados
+        # Potencia Punta
+        match_potencia = re.search(r'Potencia\s+punta:\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
+        potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
+        
+        # Días Facturados
         match_dias = re.search(r'DIAS\s+FACTURADOS:\s*(\d+)', texto_completo, re.IGNORECASE)
-        dias = int(match_dias.group(1)) if match_dias {cite: 183} else 0
+        dias = int(match_dias.group(1)) if match_dias else 0
 
-        # Energía consumida por tramos (Punta, Llano, Valle)
-        p_punta = re.search(r'Punta[:\s]+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        p_llano = re.search(r'Llano[:\s]+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        p_valle = re.search(r'Valle[:\s]+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-
+        # Energía Consumida (Punta, Llano, Valle)
+        p_punta = re.search(r'Punta\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        p_llano = re.search(r'Llano\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        p_valle = re.search(r'Valle\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        
         consumos = {
-            'punta': float(p_punta.group(1).replace(',', '.')) if p_punta {cite: 220, 271} else 0.0,
-            'llano': float(p_llano.group(1).replace(',', '.')) if p_llano {cite: 221, 272} else 0.0,
-            'valle': float(p_valle.group(1).replace(',', '.')) if p_valle {cite: 234, 272} else 0.0
+            'punta': float(p_punta.group(1).replace(',', '.')) if p_punta else 0.0,
+            'llano': float(p_llano.group(1).replace(',', '.')) if p_llano else 0.0,
+            'valle': float(p_valle.group(1).replace(',', '.')) if p_valle else 0.0
         }
 
-        # Datos adicionales para Iberdrola
-        match_fecha = re.search(r'FECHA\s+DE\s+EMISIÓN:\s*([\d/]+\s*de\s*\w+\s*de\s*\d{4}|[\d/]+)', texto_completo, re.IGNORECASE)
-        fecha = match_fecha.group(1) if match_fecha {cite: 183} else "No encontrada"
-
-        match_total = re.search(r'TOTAL\s+IMPORTE\s+FACTURA\s*([\d,.]+)\s*€|TOTAL\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        total_real = float(match_total.group(1).replace(',', '.') if match_total.group(1) else match_total.group(2).replace(',', '.')) if match_total {cite: 184, 237} else 0.0
+        # Fecha y Total
+        match_fecha = re.search(r'FECHA\s+DE\s+EMISIÓN:\s*([\d]+\s+de\s+\w+\s+de\s+\d{4})', texto_completo, re.IGNORECASE)
+        fecha = match_fecha.group(1) if match_fecha else "No encontrada"
+        
+        match_total = re.search(r'TOTAL\s+IMPORTE\s+FACTURA\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
         excedente = 0.0
 
     else:
