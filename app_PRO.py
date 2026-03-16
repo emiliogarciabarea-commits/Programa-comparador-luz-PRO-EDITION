@@ -4,25 +4,25 @@ import pandas as pd
 import streamlit as st
 import io
 import os
+import matplotlib.pyplot as plt
 from fpdf import FPDF
 
 def generar_pdf_ahorro(df_resumen, df_comparativo, mejor_cia, ahorro_anual):
     pdf = FPDF()
     pdf.add_page()
     
-    # Configuración de página y título
+    # 1. TÍTULO E INFORME
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(0, 10, "INFORME DE AHORRO ENERGETICO", ln=True, align='C')
     pdf.ln(5)
     
-    # 1. DATOS LEÍDOS DE LAS FACTURAS
+    # 2. DATOS EXTRAÍDOS
     pdf.set_font("Arial", 'B', 12)
     pdf.set_fill_color(240, 240, 240)
     pdf.cell(0, 10, "1. Datos extraidos de tus facturas", ln=True, fill=True)
     pdf.ln(2)
     
     pdf.set_font("Arial", 'B', 9)
-    # Encabezados tabla datos
     pdf.cell(35, 8, "Fecha", 1)
     pdf.cell(25, 8, "Potencia", 1)
     pdf.cell(30, 8, "Punta (kWh)", 1)
@@ -41,7 +41,7 @@ def generar_pdf_ahorro(df_resumen, df_comparativo, mejor_cia, ahorro_anual):
     
     pdf.ln(10)
 
-    # 2. COMPARATIVA CON LA MEJOR COMPAÑÍA
+    # 3. TABLA DE AHORRO MENSUAL
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(0, 10, f"2. Ahorro mensual con {mejor_cia}", ln=True, fill=True)
     pdf.ln(2)
@@ -65,23 +65,36 @@ def generar_pdf_ahorro(df_resumen, df_comparativo, mejor_cia, ahorro_anual):
         pdf.cell(40, 7, f"{fila['Ahorro']} \x80", 1, ln=True)
         pdf.set_font("Arial", '', 9)
 
-    pdf.ln(10)
+    # 4. GRÁFICA EN EL PDF
+    pdf.ln(5)
+    plt.figure(figsize=(8, 4))
+    plt.plot(df_mejor['Mes/Fecha'], df_mejor['Ahorro'], marker='o', color='green', linestyle='-')
+    plt.title(f"Evolucion del Ahorro con {mejor_cia}")
+    plt.ylabel("Ahorro (\x80)")
+    plt.grid(True, linestyle='--', alpha=0.6)
+    
+    img_buf = io.BytesIO()
+    plt.savefig(img_buf, format='png', bbox_inches='tight')
+    plt.close()
+    
+    pdf.image(img_buf, x=15, w=180)
+    pdf.ln(5)
 
-    # 3. TOTALES ANUALES
+    # 5. TOTAL ANUAL
     pdf.set_fill_color(200, 255, 200)
     pdf.set_font("Arial", 'B', 14)
     pdf.cell(0, 15, f"ESTIMACION DE AHORRO ANUAL: {round(ahorro_anual, 2)} \x80", 1, ln=True, align='C', fill=True)
     
     return pdf.output(dest='S').encode('latin-1')
 
+# --- El resto de las funciones (extraer_datos_factura, etc) se mantienen igual ---
+
 def extraer_datos_factura(pdf_path):
     texto_completo = ""
     with pdfplumber.open(pdf_path) as pdf:
         for pagina in pdf.pages:
             texto_completo += pagina.extract_text() + "\n"
-
     es_el_corte_ingles = re.search(r'Energía\s+El\s+Corte\s+Inglés|TELECOR', texto_completo, re.IGNORECASE)
-
     if es_el_corte_ingles:
         patron_cons_eci = r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)'
         match_cons = re.search(patron_cons_eci, texto_completo)
@@ -137,7 +150,6 @@ def extraer_datos_factura(pdf_path):
         else:
             match_total = re.search(r'(?:Subtotal|Importe\s+total|Total\s+factura)\s*:?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
             total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
-
     return {
         "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
         "Consumo Punta (kWh)": consumos['punta'], "Consumo Llano (kWh)": consumos['llano'],
@@ -154,7 +166,6 @@ if not os.path.exists(excel_path):
     st.error(f"No se encuentra el archivo '{excel_path}' en el repositorio.")
 else:
     uploaded_files = st.file_uploader("Sube tus facturas PDF", type="pdf", accept_multiple_files=True)
-
     if uploaded_files:
         datos_facturas = []
         for uploaded_file in uploaded_files:
@@ -167,9 +178,6 @@ else:
 
         if datos_facturas:
             df_resumen_pdfs = pd.DataFrame(datos_facturas)
-            with st.expander("🔍 Ver detalles de datos extraídos"):
-                st.dataframe(df_resumen_pdfs, use_container_width=True)
-
             df_tarifas = pd.read_excel(excel_path)
             resultados_finales = []
 
@@ -181,38 +189,23 @@ else:
                     "Ahorro": 0.0,
                     "Dias_Factura": fact['Días']
                 })
-
                 for index, tarifa in df_tarifas.iterrows():
                     try:
                         nombre_cia = tarifa.iloc[0]
-                        b_pot1 = pd.to_numeric(tarifa.iloc[1], errors='coerce')
-                        c_pot2 = pd.to_numeric(tarifa.iloc[2], errors='coerce')
-                        d_punta = pd.to_numeric(tarifa.iloc[3], errors='coerce')
-                        e_llano = pd.to_numeric(tarifa.iloc[4], errors='coerce')
-                        f_valle = pd.to_numeric(tarifa.iloc[5], errors='coerce')
-                        g_excedente = pd.to_numeric(tarifa.iloc[6], errors='coerce')
-
+                        b_pot1, c_pot2 = pd.to_numeric(tarifa.iloc[1]), pd.to_numeric(tarifa.iloc[2])
+                        d_punta, e_llano, f_valle = pd.to_numeric(tarifa.iloc[3]), pd.to_numeric(tarifa.iloc[4]), pd.to_numeric(tarifa.iloc[5])
+                        g_excedente = pd.to_numeric(tarifa.iloc[6])
                         coste_estimado = (fact['Días'] * b_pot1 * fact['Potencia (kW)']) + \
                                          (fact['Días'] * c_pot2 * fact['Potencia (kW)']) + \
                                          (fact['Consumo Punta (kWh)'] * d_punta) + \
                                          (fact['Consumo Llano (kWh)'] * e_llano) + \
                                          (fact['Consumo Valle (kWh)'] * f_valle) - \
                                          (fact['Excedente (kWh)'] * g_excedente)
-                        
                         ahorro = fact['Total Real'] - coste_estimado
-                        resultados_finales.append({
-                            "Mes/Fecha": fact['Fecha'],
-                            "Compañía/Tarifa": nombre_cia,
-                            "Coste (€)": round(coste_estimado, 2),
-                            "Ahorro": round(ahorro, 2),
-                            "Dias_Factura": fact['Días']
-                        })
+                        resultados_finales.append({"Mes/Fecha": fact['Fecha'], "Compañía/Tarifa": nombre_cia, "Coste (€)": round(coste_estimado, 2), "Ahorro": round(ahorro, 2), "Dias_Factura": fact['Días']})
                     except: continue
 
             df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
-            
-            # --- LOGICA DE ORDENACION POR FECHA ---
-            # Intentamos convertir a fecha para ordenar cronológicamente la gráfica y tabla
             df_comp['Fecha_Orden'] = pd.to_datetime(df_comp['Mes/Fecha'], errors='coerce', dayfirst=True)
             df_comp = df_comp.sort_values(by=["Fecha_Orden", "Ahorro"], ascending=[True, False])
 
@@ -220,56 +213,13 @@ else:
             ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
             ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
 
-            st.divider()
-            
             if not ranking_total.empty:
                 mejor_opcion_res = ranking_total.iloc[0]
+                dias_totales = df_resumen_pdfs['Días'].sum()
+                ahorro_anual_est = (mejor_opcion_res['Ahorro'] / dias_totales) * 365 if dias_totales > 0 else 0
                 
-                if mejor_opcion_res['Ahorro'] > 0.01:
-                    st.subheader("🏆 Resultado del Análisis")
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        st.success(f"Mejor opción: **{mejor_opcion_res['Compañía/Tarifa']}**")
-                    with c2:
-                        st.metric(label="Ahorro Total Detectado", value=f"{round(mejor_opcion_res['Ahorro'], 2)} €")
-                    with c3:
-                        dias_totales = df_resumen_pdfs['Días'].sum()
-                        ahorro_anual_est = (mejor_opcion_res['Ahorro'] / dias_totales) * 365 if dias_totales > 0 else 0
-                        st.metric(label="Estimado Ahorro Anual", value=f"{round(ahorro_anual_est, 2)} €")
-                    
-                    # --- GRÁFICA DE AHORRO ORDENADA ---
-                    st.subheader(f"📈 Evolución del Ahorro Mensual con {mejor_opcion_res['Compañía/Tarifa']}")
-                    df_grafica = df_solo_ofertas[df_solo_ofertas["Compañía/Tarifa"] == mejor_opcion_res['Compañía/Tarifa']].copy()
-                    
-                    # Graficamos usando el orden cronológico establecido
-                    st.line_chart(df_grafica, x="Mes/Fecha", y="Ahorro")
-
-                    # Generación de PDF
-                    pdf_bytes = generar_pdf_ahorro(
-                        df_resumen_pdfs, 
-                        df_comp, 
-                        mejor_opcion_res['Compañía/Tarifa'], 
-                        ahorro_anual_est
-                    )
-                    
-                    st.download_button(
-                        label="📥 Descargar Informe Detallado en PDF",
-                        data=pdf_bytes,
-                        file_name="informe_ahorro_completo.pdf",
-                        mime="application/pdf",
-                        use_container_width=True
-                    )
-                else:
-                    st.info("✅ **Tu compañía actual parece ser la más económica.**")
-
-            st.subheader("📊 Comparativa Detallada por Factura")
-            st.dataframe(
-                df_comp.drop(columns=['Dias_Factura', 'Fecha_Orden'], errors='ignore'),
-                column_config={
-                    "Mes/Fecha": "📅 Periodo",
-                    "Compañía/Tarifa": "🏢 Proveedor",
-                    "Coste (€)": st.column_config.NumberColumn("Coste Estimado", format="%.2f €"),
-                    "Ahorro": st.column_config.NumberColumn("Ahorro vs Actual", format="%.2f €")
-                },
-                hide_index=True, use_container_width=True
-            )
+                st.success(f"Análisis completado. Mejor opción: {mejor_opcion_res['Compañía/Tarifa']}")
+                
+                pdf_bytes = generar_pdf_ahorro(df_resumen_pdfs, df_comp, mejor_opcion_res['Compañía/Tarifa'], ahorro_anual_est)
+                
+                st.download_button(label="📥 Descargar Informe PDF con Gráfica", data=pdf_bytes, file_name="informe_ahorro_grafica.pdf", mime="application/pdf", use_container_width=True)
