@@ -44,22 +44,18 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_iberdrola:
-        # 1. Potencia (Potencia Punta)
         patron_potencia = r'Potencia\s+punta:\s*([\d,.]+)\s*kW'
         match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
 
-        # 2. Días: Número justo antes de "Días" en la fila "Potencia facturada"
         patron_dias = r'Potencia\s+facturada.*?(\d+)\s+días'
         match_dias = re.search(patron_dias, texto_completo, re.IGNORECASE | re.DOTALL)
         dias = int(match_dias.group(1)) if match_dias else 0
 
-        # 3. Fecha: Busca valores con formato XX/XX/XX y elige el segundo del periodo
         patron_periodo = r'PERIODO\s+DE\s+FACTURACIÓN:?.*?(\d{2}/\d{2}/\d{2,4}).*?(\d{2}/\d{2}/\d{2,4})'
         match_periodo = re.search(patron_periodo, texto_completo, re.IGNORECASE | re.DOTALL)
         fecha = match_periodo.group(2) if match_periodo else "No encontrada"
 
-        # 4. Energía Consumida (Punta, Llano, Valle)
         m_punta = re.search(r'Punta\s*([\d,.]+)\s*kWh', texto_completo)
         m_llano = re.search(r'Llano\s*([\d,.]+)\s*kWh', texto_completo)
         m_valle = re.search(r'Valle\s*([\d,.]+)\s*kWh', texto_completo)
@@ -70,7 +66,6 @@ def extraer_datos_factura(pdf_path):
             'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
 
-        # 5. Total Real: "Total importe potencia" + "Total xxx kWh hasta..."
         m_imp_potencia = re.search(r'Total\s+importe\s+potencia.*?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         m_imp_energia = re.search(r'Total\s+[\d,.]+\s*kWh\s+hasta.*?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
 
@@ -104,7 +99,6 @@ def extraer_datos_factura(pdf_path):
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
 
-        # Lógica especial para Días en Naturgy
         if es_naturgy:
             patron_dias_nat = r'Término\s+potencia\s+P1.*?(\d+)\s+días'
             match_dias_nat = re.search(patron_dias_nat, texto_completo, re.IGNORECASE | re.DOTALL)
@@ -157,7 +151,6 @@ else:
         if datos_facturas:
             df_resumen_pdfs = pd.DataFrame(datos_facturas)
             
-            # --- SECCIÓN EDITABLE ---
             with st.expander("🔍 Ver y corregir datos extraídos", expanded=True):
                 st.info("💡 Puedes hacer doble clic en cualquier celda para corregir los datos manualmente.")
                 df_resumen_pdfs = st.data_editor(df_resumen_pdfs, use_container_width=True, hide_index=True)
@@ -238,10 +231,12 @@ else:
                 hide_index=True, use_container_width=True
             )
 
+            # --- GENERACIÓN DE EXCEL CON TRES HOJAS ---
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                df_comp.to_excel(writer, index=False, sheet_name='Detalle')
-                ranking_total.to_excel(writer, index=False, sheet_name='Ranking')
+                df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
+                ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
+                df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
 
             st.download_button(
                 label="📥 Descargar Informe Completo",
@@ -249,4 +244,5 @@ else:
                 file_name="estudio_ahorro_energetico.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
+            )
             )
