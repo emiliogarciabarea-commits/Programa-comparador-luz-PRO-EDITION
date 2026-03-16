@@ -45,34 +45,32 @@ def extraer_datos_factura(pdf_path):
     elif es_iberdrola:
         # Potencia Punta
         patron_potencia = r'Potencia\s+punta:\s*([\d,.]+)\s*kW'
-        match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
+        match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
 
-        # Dias Facturados (buscamos el número que aparece después/debajo del texto)
-        patron_dias = r'DIAS\s+FACTURADOS:\s*\n?\s*(\d+)'
+        # Días facturados (Número justo antes de la palabra DIAS)
+        patron_dias = r'(\d+)\s*DIAS\s+FACTURADOS'
         match_dias = re.search(patron_dias, texto_completo, re.IGNORECASE)
         dias = int(match_dias.group(1)) if match_dias else 0
 
-        # Fecha de Emisión (buscamos el texto/fecha que aparece después/debajo)
+        # Fecha de emisión
         patron_fecha = r'FECHA\s+DE\s+EMISIÓN:\s*\n?\s*([\d]+\s+de\s+\w+\s+de\s+\d{4})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
 
-        # Energía Consumida (Punta, Llano, Valle)
-        consumos = {
-            'punta': 0.0,
-            'llano': 0.0,
-            'valle': 0.0
+        # Energía Consumida por periodos
+        patrones_ib = {
+            'punta': r'Punta\s*([\d,.]+)\s*kWh',
+            'llano': r'Llano\s*([\d,.]+)\s*kWh',
+            'valle': r'Valle\s*([\d,.]+)\s*kWh'
         }
-        m_punta = re.search(r'Punta\s+([\d,.]+)\s*kWh', texto_completo)
-        m_llano = re.search(r'Llano\s+([\d,.]+)\s*kWh', texto_completo)
-        m_valle = re.search(r'Valle\s+([\d,.]+)\s*kWh', texto_completo)
-        
-        if m_punta: consumos['punta'] = float(m_punta.group(1).replace(',', '.'))
-        if m_llano: consumos['llano'] = float(m_llano.group(1).replace(',', '.'))
-        if m_valle: consumos['valle'] = float(m_valle.group(1).replace(',', '.'))
+        consumos = {}
+        for tramo, pat in patrones_ib.items():
+            m = re.search(pat, texto_completo)
+            consumos[tramo] = float(m.group(1).replace(',', '.')) if m else 0.0
 
-        # Total Real = TOTAL ENERGIA - Impuesto electricidad - Financiacion bono social
+        # Total Real (Total Energía - Impuesto Elec - Financiación Bono Social)
+        # Buscamos los valores numéricos antes del símbolo €
         m_total_ene = re.search(r'TOTAL\s+ENERGÍA\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         m_impuesto = re.search(r'Impuesto\s+sobre\s+electricidad.*?([\d,.]+)\s*€', texto_completo, re.DOTALL | re.IGNORECASE)
         m_bono = re.search(r'Financiación\s+bono\s+social\s+fijo.*?([\d,.]+)\s*€', texto_completo, re.DOTALL | re.IGNORECASE)
