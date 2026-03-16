@@ -43,22 +43,23 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_iberdrola:
-        # Potencia Punta
+        # 1. Potencia Punta [cite: 1, 16]
         patron_potencia = r'Potencia\s+punta:\s*([\d,.]+)\s*kW'
         match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
 
-        # Días (número antes de "días" en la sección de Potencia facturada)
-        patron_dias = r'(\d+)\s*días\s*x\s*[\d,.]+\s*€/kW\s*dia'
+        # 2. Días: número antes de "días" en la línea de potencia [cite: 74]
+        # Buscamos específicamente el patrón "X días x" que aparece en el detalle
+        patron_dias = r'(\d+)\s*días\s*x'
         match_dias = re.search(patron_dias, texto_completo, re.IGNORECASE)
         dias = int(match_dias.group(1)) if match_dias else 0
 
-        # Fecha (el periodo más alto de la línea PERIODO DE FACTURACIÓN)
-        patron_periodo = r'PERIODO\s+DE\s+FACTURACIÓN:\s*([\d/]+)\s*-\s*([\d/]+)'
+        # 3. Fecha: Periodo más alto (el segundo) de PERIODO DE FACTURACIÓN [cite: 20]
+        patron_periodo = r'PERIODO\s+DE\s+FACTURACIÓN:\s*[\d/]+\s*-\s*([\d/]+)'
         match_periodo = re.search(patron_periodo, texto_completo, re.IGNORECASE)
-        fecha = match_periodo.group(2) if match_periodo else "No encontrada"
+        fecha = match_periodo.group(1) if match_periodo else "No encontrada"
 
-        # Energía Consumida (Punta, Llano, Valle)
+        # 4. Energía Consumida (Punta, Llano, Valle) [cite: 57, 58, 71]
         p_punta = r'Punta\s*([\d,.]+)\s*kWh'
         p_llano = r'Llano\s*([\d,.]+)\s*kWh'
         p_valle = r'Valle\s*([\d,.]+)\s*kWh'
@@ -73,15 +74,17 @@ def extraer_datos_factura(pdf_path):
             'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
 
-        # Total Real = TOTAL ENERGÍA - Impuesto electricidad - Financiación bono social
+        # 5. Total Real: TOTAL ENERGÍA - Impuesto - Bono social [cite: 74]
+        # Buscamos "TOTAL ENERGÍA" y luego los valores a restar
         m_total_ene = re.search(r'TOTAL\s+ENERGÍA\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_impuesto = re.search(r'Impuesto\s+sobre\s+electricidad.*?([\d,.]+)\s*€', texto_completo, re.DOTALL | re.IGNORECASE)
-        m_bono = re.search(r'Financiación\s+bono\s+social\s+fijo.*?([\d,.]+)\s*€', texto_completo, re.DOTALL | re.IGNORECASE)
+        m_impuesto = re.search(r'Impuesto\s+sobre\s+electricidad\s*[\d,.]+%?\s*/?[\d,.]*\s*€?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_bono = re.search(r'Financiación\s+bono\s+social\s+fijo\s*.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
 
         val_total_ene = float(m_total_ene.group(1).replace(',', '.')) if m_total_ene else 0.0
         val_impuesto = float(m_impuesto.group(1).replace(',', '.')) if m_impuesto else 0.0
         val_bono = float(m_bono.group(1).replace(',', '.')) if m_bono else 0.0
         
+        # Restamos los valores según tu instrucción
         total_real = val_total_ene - val_impuesto - val_bono
         excedente = 0.0
 
@@ -130,9 +133,10 @@ def extraer_datos_factura(pdf_path):
         "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
         "Consumo Punta (kWh)": consumos['punta'], "Consumo Llano (kWh)": consumos['llano'],
         "Consumo Valle (kWh)": consumos['valle'], "Excedente (kWh)": excedente,
-        "Total Real": total_real
+        "Total Real": round(total_real, 2)
     }
 
+# El resto del código de Streamlit permanece igual...
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
