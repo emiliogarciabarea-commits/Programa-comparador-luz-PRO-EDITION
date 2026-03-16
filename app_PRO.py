@@ -4,6 +4,35 @@ import pandas as pd
 import streamlit as st
 import io
 import os
+from fpdf import FPDF # Asegúrate de añadir fpdf a tu requirements.txt
+
+def generar_pdf_ahorro(periodo, actual_coste, mejor_nombre, mejor_coste, ahorro_periodo, ahorro_anual):
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Título
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, "Informe de Optimización Energética", ln=True, align='C')
+    pdf.ln(10)
+    
+    # Resumen
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, f"Análisis para el periodo: {periodo}", ln=True)
+    pdf.ln(5)
+    
+    pdf.set_font("Arial", '', 11)
+    pdf.cell(0, 8, f"- Coste en tu factura actual: {actual_coste} Euros", ln=True)
+    pdf.cell(0, 8, f"- Mejor opcion detectada: {mejor_nombre}", ln=True)
+    pdf.cell(0, 8, f"- Coste estimado con la mejor opción: {mejor_coste} Euros", ln=True)
+    
+    pdf.ln(10)
+    pdf.set_fill_color(230, 255, 230)
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 12, f"AHORRO EN ESTA FACTURA: {round(ahorro_periodo, 2)} Euros", ln=True, fill=True)
+    pdf.set_text_color(0, 128, 0)
+    pdf.cell(0, 12, f"ESTIMADO DE AHORRO ANUAL: {round(ahorro_anual, 2)} Euros", ln=True)
+    
+    return pdf.output(dest='S').encode('latin-1')
 
 def extraer_datos_factura(pdf_path):
     texto_completo = ""
@@ -118,6 +147,11 @@ else:
             resultados_finales = []
 
             for _, fact in df_resumen_pdfs.iterrows():
+                # Guardamos coste real para PDF
+                coste_real_factura = fact['Total Real']
+                periodo_factura = fact['Fecha']
+                dias_factura = fact['Días']
+
                 resultados_finales.append({
                     "Mes/Fecha": fact['Fecha'],
                     "Compañía/Tarifa": "📍 TU FACTURA ACTUAL",
@@ -154,11 +188,8 @@ else:
                     except: continue
 
             df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
-            
-            # --- ORDENACIÓN: Mes y Ahorro de Mayor a Menor ---
             df_comp = df_comp.sort_values(by=["Mes/Fecha", "Ahorro"], ascending=[True, False])
 
-            # --- LÓGICA DE GANADORA ---
             df_solo_ofertas = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"]
             ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
             ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
@@ -166,19 +197,42 @@ else:
             st.divider()
             
             if not ranking_total.empty:
-                mejor_opcion = ranking_total.iloc[0]
+                mejor_opcion_res = ranking_total.iloc[0]
                 
-                if mejor_opcion['Ahorro'] > 0.01:
+                if mejor_opcion_res['Ahorro'] > 0.01:
                     st.subheader("🏆 Resultado del Análisis")
-                    c1, c2 = st.columns(2)
+                    c1, c2, c3 = st.columns(3)
                     with c1:
-                        st.success(f"La mejor compañía es: **{mejor_opcion['Compañía/Tarifa']}**")
+                        st.success(f"Mejor opción: **{mejor_opcion_res['Compañía/Tarifa']}**")
                     with c2:
-                        st.metric(label="Ahorro Total Acumulado", value=f"{round(mejor_opcion['Ahorro'], 2)} €")
-                else:
-                    st.info("✅ **Tu compañía actual parece ser la más económica.** Ninguna de las tarifas analizadas mejora tus costes actuales en el total de los periodos subidos.")
+                        st.metric(label="Ahorro en esta subida", value=f"{round(mejor_opcion_res['Ahorro'], 2)} €")
+                    with c3:
+                        # Cálculo estimado anual: (Ahorro Total / Días totales subidos) * 365
+                        dias_totales = df_resumen_pdfs['Días'].sum()
+                        ahorro_anual_est = (mejor_opcion_res['Ahorro'] / dias_totales) * 365 if dias_totales > 0 else 0
+                        st.metric(label="Estimado Ahorro Anual", value=f"{round(ahorro_anual_est, 2)} €")
+                    
+                    # Botón para descargar PDF basado en la mejor opción
+                    mejor_coste_est = df_solo_ofertas[df_solo_ofertas["Compañía/Tarifa"] == mejor_opcion_res['Compañía/Tarifa']].iloc[0]['Coste (€)']
+                    pdf_bytes = generar_pdf_ahorro(
+                        df_resumen_pdfs.iloc[0]['Fecha'], 
+                        df_resumen_pdfs.iloc[0]['Total Real'],
+                        mejor_opcion_res['Compañía/Tarifa'],
+                        mejor_coste_est,
+                        mejor_opcion_res['Ahorro'],
+                        ahorro_anual_est
+                    )
+                    st.download_button(
+                        label="📥 Descargar Informe de Ahorro en PDF",
+                        data=pdf_bytes,
+                        file_name="informe_ahorro_energetico.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
 
-            # --- TABLA DETALLADA ---
+                else:
+                    st.info("✅ **Tu compañía actual parece ser la más económica.**")
+
             st.subheader("📊 Comparativa Detallada por Factura")
             df_comp["Estado"] = df_comp["Ahorro"].apply(
                 lambda x: "🟢 Ahorro" if x > 0.01 else ("⚪ Actual" if abs(x) <= 0.01 else "🔴 Más caro")
@@ -195,14 +249,13 @@ else:
                 hide_index=True, use_container_width=True
             )
 
-            # --- EXPORTACIÓN ---
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle')
                 ranking_total.to_excel(writer, index=False, sheet_name='Ranking')
 
             st.download_button(
-                label="📥 Descargar Informe Completo",
+                label="📥 Descargar Excel con todos los datos",
                 data=buffer_excel.getvalue(),
                 file_name="estudio_ahorro_energetico.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
