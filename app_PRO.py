@@ -37,7 +37,7 @@ def generar_pdf_ahorro(df_resumen, df_comparativo, mejor_cia, ahorro_anual):
         pdf.cell(30, 7, str(fila['Consumo Punta (kWh)']), 1)
         pdf.cell(30, 7, str(fila['Consumo Llano (kWh)']), 1)
         pdf.cell(30, 7, str(fila['Consumo Valle (kWh)']), 1)
-        pdf.cell(30, 7, f"{fila['Total Real']} e", 1, ln=True)
+        pdf.cell(30, 7, f"{fila['Total Real']} \x80", 1, ln=True)
     
     pdf.ln(10)
 
@@ -60,10 +60,10 @@ def generar_pdf_ahorro(df_resumen, df_comparativo, mejor_cia, ahorro_anual):
         coste_actual = df_comparativo[(df_comparativo["Mes/Fecha"] == fila["Mes/Fecha"]) & 
                                      (df_comparativo["Compañía/Tarifa"] == "📍 TU FACTURA ACTUAL")]["Coste (€)"].values[0]
         pdf.cell(60, 7, str(fila['Mes/Fecha']), 1)
-        pdf.cell(45, 7, f"{coste_actual} e", 1)
-        pdf.cell(45, 7, f"{fila['Coste (€)']} e", 1)
+        pdf.cell(45, 7, f"{coste_actual} \x80", 1)
+        pdf.cell(45, 7, f"{fila['Coste (€)']} \x80", 1)
         pdf.set_font("Arial", 'B', 9)
-        pdf.cell(40, 7, f"{fila['Ahorro']} e", 1, ln=True)
+        pdf.cell(40, 7, f"{fila['Ahorro']} \x80", 1, ln=True)
         pdf.set_font("Arial", '', 9)
 
     pdf.ln(10)
