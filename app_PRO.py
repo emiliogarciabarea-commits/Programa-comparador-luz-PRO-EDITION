@@ -77,36 +77,35 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0
 
     elif es_repsol:
-        # Fecha
-        m_fecha = re.search(r'Fecha\s+de\s+emisión\s*([\d/]+)', texto_completo, re.IGNORECASE)
+        # Fecha de emisión
+        m_fecha = re.search(r'Fecha\s+de\s+emisión:\s*([\d/]+)', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
-        
-        # Días
-        m_dias = re.search(r'Días\s+facturados\s*(\d+)', texto_completo, re.IGNORECASE)
+
+        # Potencia contratada
+        m_pot = re.search(r'Potencia\s+contratada\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
+        potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
+
+        # Días facturados
+        m_dias = re.search(r'Días\s+facturados\s*(\d+)\s*Días', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
-        
+
         # Consumos Punta, Llano, Valle
         m_punta = re.search(r'Punta\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         m_llano = re.search(r'Llano\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         m_valle = re.search(r'Valle\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        
+
         consumos = {
             'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
             'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
             'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
-        
-        # Total Real (Término Fijo + Energía)
-        m_fijo = re.search(r'Término\s+fijo\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_energia = re.search(r'Energía\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        
-        val_fijo = float(m_fijo.group(1).replace(',', '.')) if m_fijo else 0.0
-        val_energia = float(m_energia.group(1).replace(',', '.')) if m_energia else 0.0
-        total_real = val_fijo + val_energia
 
-        # Potencia (Buscamos un valor kW genérico si no se especifica)
-        m_pot = re.search(r'Potencia\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
-        potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
+        # Total Real = Término Fijo + Energía
+        m_fijo = re.search(r'Término\s+fijo\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_ene = re.search(r'Energía\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        val_fijo = float(m_fijo.group(1).replace(',', '.')) if m_fijo else 0.0
+        val_ene = float(m_ene.group(1).replace(',', '.')) if m_ene else 0.0
+        total_real = val_fijo + val_ene
         excedente = 0.0
 
     else:
@@ -265,6 +264,7 @@ else:
                 hide_index=True, use_container_width=True
             )
 
+            # --- GENERACIÓN DE EXCEL CON TRES HOJAS ---
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
