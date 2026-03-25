@@ -77,35 +77,35 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0
 
     elif es_repsol:
-        # Fecha de emisión
+        # 1. Fecha
         m_fecha = re.search(r'Fecha\s+de\s+emisión:\s*([\d/]+)', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
 
-        # Potencia contratada
+        # 2. Potencia
         m_pot = re.search(r'Potencia\s+contratada\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # Días facturados
-        m_dias = re.search(r'Días\s+facturados\s*(\d+)\s*Días', texto_completo, re.IGNORECASE)
+        # 3. Días
+        m_dias = re.search(r'Días\s+facturados\s*(\d+)', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
 
-        # Consumos Punta, Llano, Valle
-        m_punta = re.search(r'Punta\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_llano = re.search(r'Llano\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_valle = re.search(r'Valle\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-
-        consumos = {
-            'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
-            'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
-            'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
-        }
-
-        # Total Real = Término Fijo + Energía
+        # 4. Total Real (Término Fijo + Energía)
         m_fijo = re.search(r'Término\s+fijo\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_ene = re.search(r'Energía\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_ener = re.search(r'Energía\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         val_fijo = float(m_fijo.group(1).replace(',', '.')) if m_fijo else 0.0
-        val_ene = float(m_ene.group(1).replace(',', '.')) if m_ene else 0.0
-        total_real = val_fijo + val_ene
+        val_ener = float(m_ener.group(1).replace(',', '.')) if m_ener else 0.0
+        total_real = val_fijo + val_ener
+
+        # 5, 6, 7. Consumos Punta, Llano, Valle
+        m_p = re.search(r'Punta\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_l = re.search(r'Llano\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_v = re.search(r'Valle\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        
+        consumos = {
+            'punta': float(m_p.group(1).replace(',', '.')) if m_p else 0.0,
+            'llano': float(m_l.group(1).replace(',', '.')) if m_l else 0.0,
+            'valle': float(m_v.group(1).replace(',', '.')) if m_v else 0.0
+        }
         excedente = 0.0
 
     else:
