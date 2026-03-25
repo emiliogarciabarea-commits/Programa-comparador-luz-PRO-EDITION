@@ -57,18 +57,18 @@ def extraer_datos_factura(pdf_path):
         m_dias = re.search(r'Días\s+facturados\s*(\d+)', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
 
-        # 4. Total Real: Suma de "Término fijo" e "Energía"
+        # 4. Total Real: Suma de "Término fijo" y "Energía"
         m_fijo = re.search(r'Término\s+fijo\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         m_ener = re.search(r'Energía\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         v_fijo = float(m_fijo.group(1).replace(',', '.')) if m_fijo else 0.0
         v_ener = float(m_ener.group(1).replace(',', '.')) if m_ener else 0.0
         total_real = v_fijo + v_ener
 
-        # 5, 6 y 7. Consumos (buscando el valor numérico debajo o seguido de la palabra)
-        # El patrón [\s\S]*? permite saltos de línea hasta encontrar el primer número seguido de kWh
-        m_punta = re.search(r'Punta\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_llano = re.search(r'Llano\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_valle = re.search(r'Valle\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        # 5, 6 y 7. Consumos (Busca el valor numérico que está antes de kWh en cada columna/tramo)
+        # Se buscan patrones específicos que aparecen tras las palabras clave en la estructura de Repsol
+        m_punta = re.search(r'Punta\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_llano = re.search(r'Llano\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_valle = re.search(r'Valle\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
 
         consumos = {
             'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
