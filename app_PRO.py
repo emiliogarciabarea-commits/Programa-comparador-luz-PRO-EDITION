@@ -64,16 +64,15 @@ def extraer_datos_factura(pdf_path):
         v_ener = float(m_ener.group(1).replace(',', '.')) if m_ener else 0.0
         total_real = v_fijo + v_ener
 
-        # 5, 6 y 7. Consumos (Busca el valor numérico que está antes de kWh en cada columna/tramo)
-        # Se buscan patrones específicos que aparecen tras las palabras clave en la estructura de Repsol
-        m_punta = re.search(r'Punta\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_llano = re.search(r'Llano\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_valle = re.search(r'Valle\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        # 5, 6 y 7. Consumo: Busca el valor numérico seguido de kWh en la fila de consumo
+        m_consumo_gen = re.search(r'Consumo\s+en\s+este\s+periodo\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        valor_consumo = float(m_consumo_gen.group(1).replace(',', '.')) if m_consumo_gen else 0.0
 
+        # Repsol suele dar un total, lo repartimos para que el comparador funcione si no hay desglose
         consumos = {
-            'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
-            'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
-            'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
+            'punta': valor_consumo,
+            'llano': 0.0,
+            'valle': 0.0
         }
         excedente = 0.0
 
