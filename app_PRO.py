@@ -64,10 +64,10 @@ def extraer_datos_factura(pdf_path):
         v_ener = float(m_ener.group(1).replace(',', '.')) if m_ener else 0.0
         total_real = v_fijo + v_ener
 
-        # 5, 6 y 7. Consumos (Mejorado para detectar valores tras saltos de línea o espacios)
-        m_punta = re.search(r'Punta\s*[:\-]?\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_llano = re.search(r'Llano\s*[:\-]?\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_valle = re.search(r'Valle\s*[:\-]?\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        # 5, 6 y 7. Consumos (Busca el valor kWh que sigue a la palabra, incluso en línea nueva)
+        m_punta = re.search(r'Punta\s*[\s\n]*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_llano = re.search(r'Llano\s*[\s\n]*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_valle = re.search(r'Valle\s*[\s\n]*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
 
         consumos = {
             'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
