@@ -19,22 +19,23 @@ def extraer_datos_factura(pdf_path):
     es_endesa_luz = re.search(r'endesa\s+luz', texto_completo, re.IGNORECASE)
 
     if es_endesa_luz:
-        # 1. Fecha de emisión (Formato DD/MM/AAAA)
+        # 1. Fecha de emisión
         m_fecha = re.search(r'Fecha\s+emisión\s+factura:\s*([\d/]+)', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
 
-        # 2. Días (Busca el número dentro de los paréntesis en el apartado de consumo)
+        # 2. Días (Captura el número dentro de los paréntesis)
         m_dias = re.search(r'\((\d+)\s+días\)', texto_completo)
         dias = int(m_dias.group(1)) if m_dias else 0
 
-        # 3. Potencia (Busca el número con coma seguido de kW)
-        m_pot = re.search(r'([\d,]+)\s*kW', texto_completo)
+        # 3. Potencia (Número decimal antes de kW)
+        m_pot = re.search(r'([\d,.]+)\s*kW', texto_completo)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. Energías (Punta, Llano, Valle) - Captura el número seguido de kWh
-        m_punta = re.search(r'Punta\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_llano = re.search(r'Llano\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_valle = re.search(r'Valle\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        # 4. Energías (Punta, Llano, Valle) - Buscamos el valor kWh asociado a cada tramo
+        # Se usa [\s\S]*? para saltar posibles saltos de línea entre la etiqueta y el valor
+        m_punta = re.search(r'Punta[\s\S]*?([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_llano = re.search(r'Llano[\s\S]*?([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_valle = re.search(r'Valle[\s\S]*?([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         
         consumos = {
             'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
@@ -42,9 +43,10 @@ def extraer_datos_factura(pdf_path):
             'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
 
-        # 5. Total Real (Suma de "Potencia" y "Energia" en € del resumen)
-        m_imp_pot = re.search(r'Potencia\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_imp_ene = re.search(r'Energia\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        # 5. Total Real (Suma de los importes de Potencia y Energia en €)
+        # Buscamos en el resumen de la factura
+        m_imp_pot = re.search(r'Potencia\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_imp_ene = re.search(r'Energia\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
         val_pot = float(m_imp_pot.group(1).replace(',', '.')) if m_imp_pot else 0.0
         val_ene = float(m_imp_ene.group(1).replace(',', '.')) if m_imp_ene else 0.0
@@ -160,6 +162,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
+# --- INTERFAZ STREAMLIT ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
