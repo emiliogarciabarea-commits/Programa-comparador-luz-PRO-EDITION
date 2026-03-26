@@ -90,8 +90,8 @@ def extraer_datos_factura(pdf_path):
 
         consumos = {
             'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
-            'llano': float(m_llano.group(2).replace(',', '.')) if m_llano else 0.0,
-            'valle': float(m_valle.group(3).replace(',', '.')) if m_valle else 0.0
+            'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
+            'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
 
         m_imp_potencia = re.search(r'Total\s+importe\s+potencia.*?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
@@ -104,17 +104,17 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0
 
     elif es_endesa:
-        # 1. Fecha: Justo al lado de emision factura
-        m_fecha = re.search(r'Fecha\s+emisión\s+factura:\s*([\d/]+)', texto_completo, re.IGNORECASE)
+        # 1. Fecha: Formato DD/MM/AAAA junto a Fecha emisión factura
+        m_fecha = re.search(r'Fecha\s+emisión\s+factura:\s*(\d{2}/\d{2}/\d{4})', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
 
-        # 2. Días: Busca el número justo antes de "días"
+        # 2. Días: Número justo antes de días
         m_dias = re.search(r'(\d+)\s+días', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
 
         # 3. Potencia (punta-llano)
-        m_pot = re.search(r'punta-llano\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
-        potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
+        m_pot_val = re.search(r'punta-llano\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
+        potencia = float(m_pot_val.group(1).replace(',', '.')) if m_pot_val else 0.0
 
         # 4. Consumos desglosados (Punta, Llano, Valle)
         m_punta = re.search(r'Punta\s+[\d,.]+\s+[\d,.]+\s+[\d,.]+\s+[\w,.]+\s+([\d,.]+)', texto_completo, re.IGNORECASE)
@@ -127,12 +127,13 @@ def extraer_datos_factura(pdf_path):
             'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
 
-        # 5. Total Factura Electricidad
-        m_total = re.search(r'Total\s+factura\s+de\s+electricidad.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
-        if not m_total:
-            m_total = re.search(r'Factura\s+de\s+Electricidad\s*([\d,.]+)\s*€', texto_completo)
+        # 5. Valor Real: Suma de los importes de Potencia y Energía
+        m_imp_potencia = re.search(r'Potencia\s+\.+\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_imp_energia = re.search(r'Energia\s+\.+\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
-        total_real = float(m_total.group(1).replace(',', '.')) if m_total else 0.0
+        val_pot = float(m_imp_potencia.group(1).replace(',', '.')) if m_imp_potencia else 0.0
+        val_ene = float(m_imp_energia.group(1).replace(',', '.')) if m_imp_energia else 0.0
+        total_real = val_pot + val_ene
         excedente = 0.0
 
     else:
