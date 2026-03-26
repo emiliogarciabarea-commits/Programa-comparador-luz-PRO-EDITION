@@ -23,18 +23,18 @@ def extraer_datos_factura(pdf_path):
         m_fecha = re.search(r'Fecha\s+emisión\s+factura:\s*([\d/]+)', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
 
-        # 2. Días (Mantenemos lo que ya funcionaba)
+        # 2. Días (Captura el número dentro de los paréntesis)
         m_dias = re.search(r'\((\d+)\s+días\)', texto_completo)
         dias = int(m_dias.group(1)) if m_dias else 0
 
-        # 3. Potencia (Busca el valor decimal justo antes de 'kW' en la línea de P1)
-        m_pot = re.search(r'P1.*?\s+([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
+        # 3. Potencia (Busca P1 seguido de cualquier cosa hasta encontrar el valor kW)
+        m_pot = re.search(r'P1.*?\s+([\d,.]+)\s*kW', texto_completo, re.IGNORECASE | re.DOTALL)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. Energías (Punta, Llano, Valle)
-        m_punta = re.search(r'Punta\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_llano = re.search(r'Llano\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_valle = re.search(r'Valle\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        # 4. Energías (Captura el valor numérico que precede a kWh para cada tramo)
+        m_punta = re.search(r'Punta.*?\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
+        m_llano = re.search(r'Llano.*?\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
+        m_valle = re.search(r'Valle.*?\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
         
         consumos = {
             'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
@@ -42,7 +42,7 @@ def extraer_datos_factura(pdf_path):
             'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
 
-        # 5. Total Real (Suma de Potencia + Energia capturando el valor tras los puntos/espacios)
+        # 5. Total Real (Suma los importes de Potencia y Energia con puntos suspensivos)
         m_imp_pot = re.search(r'Potencia[\s.]*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         m_imp_ene = re.search(r'Energia[\s.]*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
