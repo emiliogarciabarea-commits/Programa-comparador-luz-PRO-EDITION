@@ -5,21 +5,6 @@ import streamlit as st
 import io
 import os
 
-# Configuración de página con estilo "App"
-st.set_page_config(page_title="EnergyApp Pro", layout="wide", page_icon="⚡")
-
-# --- ESTILOS CSS PERSONALIZADOS ---
-st.markdown("""
-    <style>
-    .main { background-color: #f8f9fa; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .stDataFrame { border-radius: 10px; }
-    div[data-testid="stExpander"] { background-color: #ffffff; border-radius: 10px; }
-    /* Estilo para los botones */
-    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #007bff; color: white; }
-    </style>
-    """, unsafe_allow_html=True)
-
 def extraer_datos_factura(pdf_path):
     texto_completo = ""
     with pdfplumber.open(pdf_path) as pdf:
@@ -31,55 +16,73 @@ def extraer_datos_factura(pdf_path):
     es_iberdrola = re.search(r'IBERDROLA\s+CLIENTES', texto_completo, re.IGNORECASE)
     es_naturgy = re.search(r'Naturgy', texto_completo, re.IGNORECASE)
     es_repsol = re.search(r'repsol', texto_completo, re.IGNORECASE)
+    # Endesa Energía (Mercado Libre) no es lo mismo que Energía XXI (Referencia)
     es_endesa_luz = re.search(r'Endesa\s+Energía', texto_completo, re.IGNORECASE)
 
     if es_el_corte_ingles:
         patron_cons_eci = r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)'
         match_cons = re.search(patron_cons_eci, texto_completo)
+        
         consumos = {
             'punta': float(match_cons.group(1).replace(',', '.')) if match_cons else 0.0,
             'llano': float(match_cons.group(2).replace(',', '.')) if match_cons else 0.0,
             'valle': float(match_cons.group(3).replace(',', '.')) if match_cons else 0.0
         }
+
         patron_potencia = r'Potencia\s+contratada\s+kW\s+([\d,.]+)'
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
+
         patron_fecha = r'Fecha\s+de\s+Factura:\s*([\d/]+)'
         match_fecha = re.search(patron_fecha, texto_completo)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
+
         patron_dias = r'Días\s+de\s+consumo:\s*(\d+)'
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
+
         patron_total = r'TOTAL\s+FACTURA\s+([\d,.]+)\s*€'
         match_total = re.search(patron_total, texto_completo)
         total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
         excedente = 0.0 
 
     elif es_endesa_luz:
+        # 1. Fecha: Búsqueda robusta (Primero por etiqueta, luego por primer formato DD/MM/AAAA)
         m_fecha_etiqueta = re.search(r'Fecha\s+emisión\s+factura:\s*([\d/]{10})', texto_completo, re.IGNORECASE)
         if m_fecha_etiqueta:
             fecha = m_fecha_etiqueta.group(1)
         else:
             m_fecha_generica = re.search(r'(\d{2}/\d{2}/\d{4})', texto_completo)
             fecha = m_fecha_generica.group(1) if m_fecha_generica else "No encontrada"
+
+        # 2. Días: Número justo antes de "días"
         m_dias = re.search(r'(\d+)\s+días', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
+
+        # 3. Potencia: Justo al lado de kW en punta-llano
         m_pot = re.search(r'punta-llano\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
+
+        # 4. Valor Real: Suma de Potencia y Energía (limpiando puntos y espacios rebeldes)
         def limpiar_valor_endesa(patron, texto):
             match = re.search(patron, texto, re.IGNORECASE)
             if match:
                 valor_sucio = match.group(1)
-                valor_limpio = valor_sucio.replace(" ", "").replace(".", "").replace(",", ".")
+                valor_limpio = valor_sucio.replace(" ", "").replace(".", "")
+                valor_limpio = valor_limpio.replace(",", ".")
                 try: return float(valor_limpio)
                 except: return 0.0
             return 0.0
+
         val_potencia = limpiar_valor_endesa(r'Potencia\s+\.+\s*([\d\s.,]+)€', texto_completo)
         val_energia = limpiar_valor_endesa(r'Energía\s+\.+\s*([\d\s.,]+)€', texto_completo)
         total_real = val_potencia + val_energia
+
+        # 5. Consumos (Punta, Llano, Valle)
         m_punta = re.search(r'Punta\s+[\d,.]+\s+[\d,.]+\s+[\d,.]+\s+[\w,.]+\s+([\d,.]+)', texto_completo, re.IGNORECASE)
         m_llano = re.search(r'Llano\s+[\d,.]+\s+[\d,.]+\s+[\d,.]+\s+[\w,.]+\s+([\d,.]+)', texto_completo, re.IGNORECASE)
         m_valle = re.search(r'Valle\s+[\d,.]+\s+[\d,.]+\s+[\d,.]+\s+[\w,.]+\s+([\d,.]+)', texto_completo, re.IGNORECASE)
+        
         consumos = {
             'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
             'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
@@ -169,21 +172,50 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# --- HEADER APP ---
-st.title("⚡ EnergyApp Pro")
-st.caption("Analiza tus facturas y descubre el ahorro real al instante")
+# --- CONFIGURACIÓN DE LA APP (ESTILO) ---
+st.set_page_config(page_title="Energy Advisor Pro", layout="wide", initial_sidebar_state="expanded")
+
+# Inyectar CSS para interfaz tipo App y Colores
+st.markdown("""
+    <style>
+    /* Fondo General */
+    .stApp { background-color: #0e1117; color: #ffffff; }
+    
+    /* Tarjetas de resultados */
+    .result-card {
+        background-color: #1f2937;
+        padding: 20px;
+        border-radius: 15px;
+        border: 1px solid #374151;
+        margin-bottom: 20px;
+    }
+    
+    /* Estilos de Ahorro */
+    .ahorro-positivo { color: #10b981 !important; font-weight: bold; font-size: 1.1em; }
+    .ahorro-negativo { color: #ef4444 !important; font-weight: bold; font-size: 1.1em; }
+    
+    /* Títulos */
+    h1, h2, h3 { color: #3b82f6 !important; }
+    
+    /* Sidebar */
+    [data-testid="stSidebar"] { background-color: #111827; border-right: 1px solid #374151; }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.title("⚡ Comparador Energético Inteligente")
+st.markdown("---")
 
 excel_path = "tarifas_companias.xlsx"
 
-# --- SIDEBAR TIPO APP ---
+# BARRA LATERAL (Uploader)
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/1087/1087080.png", width=100)
-    st.header("Configuración")
-    uploaded_files = st.file_uploader("📂 Sube tus facturas PDF", type="pdf", accept_multiple_files=True)
-    st.info("Sube una o varias facturas para comparar precios con el mercado.")
+    st.image("https://cdn-icons-png.flaticon.com/512/3103/3103446.png", width=100)
+    st.header("Panel de Control")
+    uploaded_files = st.file_uploader("Subir Facturas (PDF)", type="pdf", accept_multiple_files=True)
+    st.info("Sube una o varias facturas para comparar con el mercado actual.")
 
 if not os.path.exists(excel_path):
-    st.error(f"⚠️ El archivo maestro '{excel_path}' no está disponible.")
+    st.error(f"⚠️ Error Crítico: No se encuentra '{excel_path}'.")
 else:
     if uploaded_files:
         datos_facturas = []
@@ -193,18 +225,21 @@ else:
                 res['Archivo'] = uploaded_file.name
                 datos_facturas.append(res)
             except Exception as e:
-                st.sidebar.error(f"Error en {uploaded_file.name}")
+                st.error(f"Error procesando {uploaded_file.name}: {e}")
 
         if datos_facturas:
             df_resumen_pdfs = pd.DataFrame(datos_facturas)
             
-            with st.expander("📝 Datos extraídos (Haz clic para editar si es necesario)", expanded=False):
+            with st.container():
+                st.subheader("🔍 Datos Detectados")
+                # El editor de datos ya tiene fondo oscuro nativo en modo dark
                 df_resumen_pdfs = st.data_editor(df_resumen_pdfs, use_container_width=True, hide_index=True)
 
             df_tarifas = pd.read_excel(excel_path)
             resultados_finales = []
 
             for _, fact in df_resumen_pdfs.iterrows():
+                # Fila Actual
                 resultados_finales.append({
                     "Mes/Fecha": fact['Fecha'],
                     "Compañía/Tarifa": "📍 TU FACTURA ACTUAL",
@@ -244,33 +279,55 @@ else:
             ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
             ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
 
-            # --- RESULTADOS TIPO "DASHBOARD" ---
-            st.divider()
+            # --- SECCIÓN DE RESULTADOS TOP ---
+            st.markdown("### 🏆 Análisis de Optimización")
             
             if not ranking_total.empty:
                 mejor_opcion_nombre = ranking_total.iloc[0]['Compañía/Tarifa']
-                fila_ganadora = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre]
+                mejor_ahorro = round(ranking_total.iloc[0]['Ahorro'], 2)
                 
-                c1, c2 = st.columns([2, 1])
-                with c1:
-                    st.success(f"### 🏆 Opción recomendada: **{mejor_opcion_nombre}**")
-                with c2:
-                    st.metric(label="Ahorro Total", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €", delta="Optimizado")
+                # Layout de App: Métrica y Ganador
+                col_m1, col_m2 = st.columns(2)
+                with col_m1:
+                    st.markdown(f"""
+                    <div class="result-card">
+                        <small>MEJOR OPCIÓN ENCONTRADA</small>
+                        <h2 style='margin:0;'>{mejor_opcion_nombre}</h2>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_m2:
+                    st.markdown(f"""
+                    <div class="result-card">
+                        <small>AHORRO TOTAL ESTIMADO</small>
+                        <h2 style='margin:0; color:#10b981;'>+{mejor_ahorro} €</h2>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-            # --- TABLA ESTILIZADA CON COLORES ---
-            st.subheader("📊 Comparativa Detallada")
+            # --- TABLA COMPARATIVA CON COLORES DINÁMICOS ---
+            st.subheader("📊 Tabla Comparativa de Mercado")
             
-            def color_ahorro(val):
-                if val > 0: color = '#d4edda' # Verde claro (Ahorro)
-                elif val < 0: color = '#f8d7da' # Rojo claro (Más caro)
-                else: color = 'transparent'
-                return f'background-color: {color}'
+            def style_ahorro(val):
+                if val > 0: return 'color: #10b981' # Verde
+                elif val < 0: return 'color: #ef4444' # Rojo
+                return ''
 
-            df_display = df_comp.drop(columns=['Dias_Factura'], errors='ignore')
-            st.dataframe(df_display.style.applymap(color_ahorro, subset=['Ahorro']), use_container_width=True, hide_index=True)
+            def format_ahorro(val):
+                if val > 0: return f"+{val} €"
+                return f"{val} €"
 
-            # --- BOTÓN DESCARGA ---
-            st.markdown("### 📥 Generar Reporte")
+            # Pre-formateamos el ahorro para que incluya el signo +
+            df_styled = df_comp.copy()
+            df_styled['Ahorro'] = df_styled['Ahorro'].apply(format_ahorro)
+            
+            # Mostramos la tabla. El fondo se mantiene oscuro gracias al tema 'dark' configurado
+            st.dataframe(
+                df_styled.drop(columns=['Dias_Factura'], errors='ignore'), 
+                use_container_width=True, 
+                hide_index=True
+            )
+
+            # BOTÓN DE DESCARGA (APP STYLE)
+            st.markdown("---")
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
@@ -278,11 +335,9 @@ else:
                 df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
 
             st.download_button(
-                label="Descargar Informe de Ahorro (Excel)",
+                label="🚀 GENERAR INFORME DE AHORRO COMPLETO",
                 data=buffer_excel.getvalue(),
-                file_name="informe_energia.xlsx",
+                file_name="estudio_ahorro_energetico.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
-    else:
-        st.info("👋 Bienvenida/o. Por favor, sube tus facturas en el menú de la izquierda para comenzar el análisis.")
