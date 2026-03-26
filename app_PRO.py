@@ -23,34 +23,28 @@ def extraer_datos_factura(pdf_path):
         m_fecha = re.search(r'Fecha\s+emisión\s+factura:\s*([\d/]+)', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
 
-        # 2. Días (Captura el número dentro de los paréntesis)
+        # 2. Días (Mantenemos lo que ya funcionaba)
         m_dias = re.search(r'\((\d+)\s+días\)', texto_completo)
         dias = int(m_dias.group(1)) if m_dias else 0
 
-        # 3. Potencia (Captura el número decimal justo antes de kW, ignorando puntos decorativos)
-        # En Endesa suele aparecer como "2,000 kW"
-        m_pot = re.search(r'([\d,.]+)\s*kW', texto_completo)
+        # 3. Potencia (Busca el valor decimal justo antes de 'kW' en la línea de P1)
+        m_pot = re.search(r'P1.*?\s+([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. Energías (Punta, Llano, Valle) - Captura el valor numérico en la tabla de lecturas
-        # Se busca el patrón: "Punta" + cualquier cosa + número + kWh
-        m_punta = re.search(r'Punta[\s\S]*?([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_llano = re.search(r'Llano[\s\S]*?([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_valle = re.search(r'Valle[\s\S]*?([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        
-        # Si no encuentra por tramos (factura simplificada), busca el Consumo Total
-        m_total_kwh = re.search(r'Consumo\s+Total[\s\S]*?([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        # 4. Energías (Punta, Llano, Valle)
+        m_punta = re.search(r'Punta\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_llano = re.search(r'Llano\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_valle = re.search(r'Valle\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         
         consumos = {
-            'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else (float(m_total_kwh.group(1).replace(',', '.')) if m_total_kwh else 0.0),
+            'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
             'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
             'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
 
-        # 5. Total Real (Suma de los importes de Potencia y Energía de la tabla resumen)
-        # Se busca el número decimal que precede al símbolo € en las líneas de Potencia y Energia
-        m_imp_pot = re.search(r'Potencia[\s\S]*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_imp_ene = re.search(r'Energia[\s\S]*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        # 5. Total Real (Suma de Potencia + Energia capturando el valor tras los puntos/espacios)
+        m_imp_pot = re.search(r'Potencia[\s.]*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_imp_ene = re.search(r'Energia[\s.]*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
         val_pot = float(m_imp_pot.group(1).replace(',', '.')) if m_imp_pot else 0.0
         val_ene = float(m_imp_ene.group(1).replace(',', '.')) if m_imp_ene else 0.0
