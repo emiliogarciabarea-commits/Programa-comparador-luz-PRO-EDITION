@@ -19,22 +19,25 @@ def extraer_datos_factura(pdf_path):
     es_endesa_luz = re.search(r'endesa\s+luz', texto_completo, re.IGNORECASE)
 
     if es_endesa_luz:
-        # 1. Fecha de emisión (Busca cualquier fecha cerca de 'emisión')
-        m_fecha = re.search(r'emisión.*?(\d{2}/\d{2}/\d{4})', texto_completo, re.IGNORECASE | re.DOTALL)
+        # 1. Limpieza de texto para Endesa (Eliminamos espacios para evitar 'P o t e n c i a')
+        texto_limpio = re.sub(r'\s+', '', texto_completo)
+
+        # 2. Fecha de emisión
+        m_fecha = re.search(r'emisiónfactura:?([\d/]{10})', texto_limpio, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
 
-        # 2. Días (Este ya funcionaba)
-        m_dias = re.search(r'\((\d+)\s+días\)', texto_completo)
+        # 3. Días (Buscamos el número antes de 'días')
+        m_dias = re.search(r'\((\d+)días\)', texto_limpio, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
 
-        # 3. Potencia (Busca P1, salta lo que sea y pilla el número antes de kW)
-        m_pot = re.search(r'P1.*?\s+([\d,.]+)\s*kW', texto_completo, re.IGNORECASE | re.DOTALL)
+        # 4. Potencia (Buscamos el valor tras P1 y antes de kW)
+        m_pot = re.search(r'P1.*?([\d,.]+?)kW', texto_limpio, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. Energías (Captura el valor numérico del tramo)
-        m_punta = re.search(r'Punta.*?\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
-        m_llano = re.search(r'Llano.*?\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
-        m_valle = re.search(r'Valle.*?\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
+        # 5. Energías (Punta, Llano, Valle)
+        m_punta = re.search(r'Punta.*?([\d,.]+?)kWh', texto_limpio, re.IGNORECASE)
+        m_llano = re.search(r'Llano.*?([\d,.]+?)kWh', texto_limpio, re.IGNORECASE)
+        m_valle = re.search(r'Valle.*?([\d,.]+?)kWh', texto_limpio, re.IGNORECASE)
         
         consumos = {
             'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
@@ -42,9 +45,10 @@ def extraer_datos_factura(pdf_path):
             'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
 
-        # 5. Total Real (Busca 'Potencia' y 'Energia' y pilla el primer número € que vea después)
-        m_imp_pot = re.search(r'Potencia[\s\S]*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_imp_ene = re.search(r'Energia[\s\S]*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        # 6. Total Real (Suma de los importes de Potencia y Energía)
+        # Buscamos 'Potencia' seguido de puntos/caracteres y el importe en €
+        m_imp_pot = re.search(r'Potencia[\.]+?([\d,.]+?)€', texto_limpio, re.IGNORECASE)
+        m_imp_ene = re.search(r'Energia[\.]+?([\d,.]+?)€', texto_limpio, re.IGNORECASE)
         
         val_pot = float(m_imp_pot.group(1).replace(',', '.')) if m_imp_pot else 0.0
         val_ene = float(m_imp_ene.group(1).replace(',', '.')) if m_imp_ene else 0.0
