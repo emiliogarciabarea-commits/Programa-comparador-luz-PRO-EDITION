@@ -19,19 +19,19 @@ def extraer_datos_factura(pdf_path):
     es_endesa_luz = re.search(r'endesa\s+luz', texto_completo, re.IGNORECASE)
 
     if es_endesa_luz:
-        # 1. Fecha de emisión
-        m_fecha = re.search(r'Fecha\s+emisión\s+factura:\s*([\d/]+)', texto_completo, re.IGNORECASE)
+        # 1. Fecha de emisión (Busca cualquier fecha cerca de 'emisión')
+        m_fecha = re.search(r'emisión.*?(\d{2}/\d{2}/\d{4})', texto_completo, re.IGNORECASE | re.DOTALL)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
 
-        # 2. Días (Captura el número dentro de los paréntesis)
+        # 2. Días (Este ya funcionaba)
         m_dias = re.search(r'\((\d+)\s+días\)', texto_completo)
         dias = int(m_dias.group(1)) if m_dias else 0
 
-        # 3. Potencia (Busca P1 seguido de cualquier cosa hasta encontrar el valor kW)
+        # 3. Potencia (Busca P1, salta lo que sea y pilla el número antes de kW)
         m_pot = re.search(r'P1.*?\s+([\d,.]+)\s*kW', texto_completo, re.IGNORECASE | re.DOTALL)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. Energías (Captura el valor numérico que precede a kWh para cada tramo)
+        # 4. Energías (Captura el valor numérico del tramo)
         m_punta = re.search(r'Punta.*?\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
         m_llano = re.search(r'Llano.*?\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
         m_valle = re.search(r'Valle.*?\s+([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
@@ -42,9 +42,9 @@ def extraer_datos_factura(pdf_path):
             'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
 
-        # 5. Total Real (Suma los importes de Potencia y Energia con puntos suspensivos)
-        m_imp_pot = re.search(r'Potencia[\s.]*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_imp_ene = re.search(r'Energia[\s.]*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        # 5. Total Real (Busca 'Potencia' y 'Energia' y pilla el primer número € que vea después)
+        m_imp_pot = re.search(r'Potencia[\s\S]*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_imp_ene = re.search(r'Energia[\s\S]*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
         val_pot = float(m_imp_pot.group(1).replace(',', '.')) if m_imp_pot else 0.0
         val_ene = float(m_imp_ene.group(1).replace(',', '.')) if m_imp_ene else 0.0
