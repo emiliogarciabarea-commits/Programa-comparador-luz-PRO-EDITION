@@ -5,3 +5,5 @@ openpyxl
 xlsxwriter
 fpdf2
 fpdf
+pytesseract
+pillow
