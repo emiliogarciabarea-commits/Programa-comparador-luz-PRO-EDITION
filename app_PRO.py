@@ -5,13 +5,14 @@ import streamlit as st
 import io
 import os
 
-# --- LÓGICA DE EXTRACCIÓN (SIN CAMBIOS) ---
+# --- 1. LÓGICA ORIGINAL (SIN CAMBIOS) ---
 def extraer_datos_factura(pdf_path):
     texto_completo = ""
     with pdfplumber.open(pdf_path) as pdf:
         for pagina in pdf.pages:
             texto_completo += pagina.extract_text() + "\n"
 
+    # --- DETECCIÓN DE TIPO DE FACTURA ---
     es_el_corte_ingles = re.search(r'Energía\s+El\s+Corte\s+Inglés|TELECOR', texto_completo, re.IGNORECASE)
     es_iberdrola = re.search(r'IBERDROLA\s+CLIENTES', texto_completo, re.IGNORECASE)
     es_naturgy = re.search(r'Naturgy', texto_completo, re.IGNORECASE)
@@ -51,15 +52,16 @@ def extraer_datos_factura(pdf_path):
         dias = int(m_dias.group(1)) if m_dias else 0
         m_pot = re.search(r'punta-llano\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
+
         def limpiar_valor_endesa(patron, texto):
             match = re.search(patron, texto, re.IGNORECASE)
             if match:
                 valor_sucio = match.group(1)
-                valor_limpio = valor_sucio.replace(" ", "").replace(".", "")
-                valor_limpio = valor_limpio.replace(",", ".")
+                valor_limpio = valor_sucio.replace(" ", "").replace(".", "").replace(",", ".")
                 try: return float(valor_limpio)
                 except: return 0.0
             return 0.0
+
         val_potencia = limpiar_valor_endesa(r'Potencia\s+\.+\s*([\d\s.,]+)€', texto_completo)
         val_energia = limpiar_valor_endesa(r'Energía\s+\.+\s*([\d\s.,]+)€', texto_completo)
         total_real = val_potencia + val_energia
@@ -155,59 +157,62 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# --- CONFIGURACIÓN DE LA APP (INTERFAZ TIPO APP) ---
-st.set_page_config(page_title="EnergyScan Pro", page_icon="⚡", layout="wide")
+# --- 2. CONFIGURACIÓN DE PÁGINA Y ESTILO (NUEVO ASPECTO) ---
+st.set_page_config(page_title="EnergyScan Pro", layout="wide", page_icon="⚡")
 
-# Estilo CSS para mejorar la apariencia
+# Inyección de CSS para mejorar el aspecto visual
 st.markdown("""
     <style>
-    .main { background-color: #f5f7f9; }
+    .main { background-color: #f8f9fa; }
     .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .stDownloadButton button { width: 100%; border-radius: 5px; height: 3em; background-color: #007bff; color: white; }
+    .stDataFrame { background-color: #ffffff; border-radius: 10px; }
+    h1 { color: #1e3a8a; font-family: 'Helvetica Neue', sans-serif; }
+    h3 { color: #334155; }
+    .sidebar .sidebar-content { background-image: linear-gradient(#2e7bcf,#2e7bcf); color: white; }
     </style>
     """, unsafe_allow_html=True)
 
-# BARRA LATERAL (Sidebar)
+# --- 3. SIDEBAR (ZONA DE CARGA) ---
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/944/944948.png", width=100)
-    st.title("EnergyScan Pro")
-    st.info("Sube tus facturas en PDF para analizar el ahorro potencial con otras compañías.")
-    uploaded_files = st.file_uploader("📂 Cargar Facturas (PDF)", type="pdf", accept_multiple_files=True)
+    st.image("https://cdn-icons-png.flaticon.com/512/3103/3103159.png", width=80)
+    st.title("Panel de Control")
+    st.info("Sube tus facturas en PDF para iniciar el análisis comparativo.")
+    uploaded_files = st.file_uploader("📂 Cargar Facturas", type="pdf", accept_multiple_files=True)
     st.divider()
-    st.caption("v2.1 - Comparador Inteligente")
+    st.caption("EnergyScan Pro v2.0 - Análisis de precisión")
 
-# CUERPO PRINCIPAL
-st.title("⚡ Panel de Análisis Energético")
+# --- 4. CUERPO PRINCIPAL ---
+st.title("⚡ Comparador Energético Inteligente")
+st.markdown("Analiza tus facturas actuales y descubre el ahorro potencial con otras comercializadoras.")
 
 excel_path = "tarifas_companias.xlsx"
 
 if not os.path.exists(excel_path):
-    st.error(f"❌ Error: No se encuentra el archivo de base de datos '{excel_path}'.")
+    st.error(f"⚠️ Error: No se encuentra el archivo de base de datos '{excel_path}'.")
 else:
     if not uploaded_files:
-        st.warning("👈 Por favor, sube una o más facturas en la barra lateral para comenzar.")
-        # Simulación de pasos para el usuario
-        cols = st.columns(3)
-        cols[0].step("1. Sube tus PDF")
-        cols[1].step("2. Revisa los datos")
-        cols[2].step("3. ¡Ahorra!")
+        st.warning("👈 Por favor, sube al menos una factura en el panel de la izquierda para comenzar.")
     else:
+        # --- PROCESAMIENTO ---
         datos_facturas = []
-        for uploaded_file in uploaded_files:
-            try:
-                res = extraer_datos_factura(io.BytesIO(uploaded_file.read()))
-                res['Archivo'] = uploaded_file.name
-                datos_facturas.append(res)
-            except Exception as e:
-                st.error(f"Error procesando {uploaded_file.name}: {e}")
+        with st.spinner('Analizando documentos...'):
+            for uploaded_file in uploaded_files:
+                try:
+                    res = extraer_datos_factura(io.BytesIO(uploaded_file.read()))
+                    res['Archivo'] = uploaded_file.name
+                    datos_facturas.append(res)
+                except Exception as e:
+                    st.error(f"Error procesando {uploaded_file.name}: {e}")
 
         if datos_facturas:
-            # Pestañas para organizar la información
-            tab1, tab2 = st.tabs(["📝 Revisión de Datos", "📊 Resultados del Estudio"])
+            df_resumen_pdfs = pd.DataFrame(datos_facturas)
+            
+            # Organización por pestañas para limpiar la vista
+            tab1, tab2 = st.tabs(["📝 Datos Extraídos", "📊 Comparativa de Ahorro"])
 
             with tab1:
-                st.subheader("Datos extraídos automáticamente")
-                df_resumen_pdfs = pd.DataFrame(datos_facturas)
+                st.subheader("Datos detectados en tus facturas")
+                st.info("Puedes editar los valores directamente en la tabla si detectas algún error de lectura.")
                 df_resumen_pdfs = st.data_editor(df_resumen_pdfs, use_container_width=True, hide_index=True)
 
             with tab2:
@@ -215,6 +220,7 @@ else:
                 resultados_finales = []
 
                 for _, fact in df_resumen_pdfs.iterrows():
+                    # Línea base (Factura actual)
                     resultados_finales.append({
                         "Mes/Fecha": fact['Fecha'],
                         "Compañía/Tarifa": "📍 TU FACTURA ACTUAL",
@@ -223,6 +229,7 @@ else:
                         "Dias_Factura": fact['Días']
                     })
 
+                    # Cálculos con base de datos
                     for index, tarifa in df_tarifas.iterrows():
                         try:
                             nombre_cia = tarifa.iloc[0]
@@ -250,37 +257,41 @@ else:
 
                 df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
                 df_comp = df_comp.sort_values(by=["Mes/Fecha", "Ahorro"], ascending=[True, False])
+                
+                # --- MÉTRICAS DE ÉXITO ---
                 df_solo_ofertas = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"]
                 ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
                 ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
 
                 if not ranking_total.empty:
                     mejor_opcion_nombre = ranking_total.iloc[0]['Compañía/Tarifa']
-                    ahorro_total = round(ranking_total.iloc[0]['Ahorro'], 2)
+                    st.subheader("🏆 Recomendación Ganadora")
                     
-                    # KPIs en la parte superior
-                    st.subheader("🏆 Ganador del Análisis")
-                    m1, m2, m3 = st.columns(3)
-                    m1.metric("Mejor Compañía", mejor_opcion_nombre)
-                    m2.metric("Ahorro Total", f"{ahorro_total} €", delta=f"{ahorro_total} €", delta_color="normal")
-                    m3.markdown("### ") # Espaciador
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        st.metric("Mejor Opción", mejor_opcion_nombre)
+                    with c2:
+                        st.metric("Ahorro Acumulado", f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €", delta_color="normal")
+                    with c3:
+                        st.metric("Facturas Analizadas", len(uploaded_files))
 
-                    # Detalle
                     st.divider()
-                    st.subheader("Detalle de precios y comparativa")
-                    st.dataframe(df_comp.drop(columns=['Dias_Factura'], errors='ignore'), use_container_width=True, hide_index=True)
 
-                    # Botón de descarga destacado
-                    st.subheader("📂 Exportar Resultados")
-                    buffer_excel = io.BytesIO()
-                    with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                        df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
-                        ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
-                        df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
-                    
-                    st.download_button(
-                        label="📥 DESCARGAR INFORME DE AHORRO EXCEL",
-                        data=buffer_excel.getvalue(),
-                        file_name="estudio_ahorro_energetico.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+                st.subheader("Detalle Comparativo por Período")
+                st.dataframe(df_comp.drop(columns=['Dias_Factura'], errors='ignore'), use_container_width=True, hide_index=True)
+
+                # --- EXPORTACIÓN ---
+                st.subheader("📥 Exportar Resultados")
+                buffer_excel = io.BytesIO()
+                with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+                    df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
+                    ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
+                    df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
+
+                st.download_button(
+                    label="Descargar Informe en Excel (.xlsx)",
+                    data=buffer_excel.getvalue(),
+                    file_name="informe_ahorro_energia.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
