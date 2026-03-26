@@ -61,29 +61,19 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0
 
     elif es_endesa:
-        # --- BLOQUE ENDESA ULTRA-RESISTENTE ---
-        fecha = "No encontrada"
-        dias = 0
+        # --- BLOQUE ENDESA: BÚSQUEDA POR PATRÓN DE FECHA PURO ---
+        todas_las_fechas = re.findall(r'(\d{2}/\d{2}/\d{4})', texto_completo)
+        fecha = todas_las_fechas[0] if todas_las_fechas else "No encontrada"
+
+        m_dias = re.search(r'\((\d+)\s+días\)', texto_completo)
+        dias = int(m_dias.group(1)) if m_dias else 0
+
         potencia = 0.0
         consumos = {'punta': 0.0, 'llano': 0.0, 'valle': 0.0}
         val_pot = 0.0
         val_ene = 0.0
 
-        for i, linea in enumerate(lineas_factura):
-            # Búsqueda de Fecha (en la misma línea o la siguiente)
-            if "Fecha emisión factura" in linea:
-                m_f = re.search(r'(\d{2}/\d{2}/\d{4})', linea)
-                if m_f: fecha = m_f.group(1)
-                elif i+1 < len(lineas_factura):
-                    m_f2 = re.search(r'(\d{2}/\d{2}/\d{4})', lineas_factura[i+1])
-                    if m_f2: fecha = m_f2.group(1)
-
-            # Búsqueda de Días
-            if "días" in linea:
-                m_d = re.search(r'(\d+)\s+días', linea)
-                if m_d: dias = int(m_d.group(1))
-
-            # Potencia y Consumos
+        for linea in lineas_factura:
             if "P1" in linea and "kW" in linea:
                 m = re.search(r'([\d,.]+)\s*kW', linea)
                 if m: potencia = float(m.group(1).replace(',', '.'))
@@ -96,8 +86,6 @@ def extraer_datos_factura(pdf_path):
             if "Valle" in linea and "kWh" in linea:
                 m = re.search(r'([\d,.]+)\s*kWh', linea)
                 if m: consumos['valle'] = float(m.group(1).replace(',', '.'))
-
-            # Importes del resumen
             if "Potencia" in linea and "€" in linea:
                 m = re.search(r'([\d,.]+)\s*€', linea)
                 if m: val_pot = float(m.group(1).replace(',', '.'))
@@ -116,14 +104,16 @@ def extraer_datos_factura(pdf_path):
                 m = re.search(p, texto_completo, re.IGNORECASE)
                 if m: consumos[tramo] = float(m.group(1).replace(',', '.')); break
         potencia = float(re.search(r'(?:Potencia\s+contratada(?:\s+en\s+punta-llano|\s+P1)?):\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE).group(1).replace(',', '.')) if re.search(r'(?:Potencia\s+contratada(?:\s+en\s+punta-llano|\s+P1)?):\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE) else 0.0
-        fecha = re.search(r'(?:emitida\s+el|Fecha\s+de\s+emisión:)\s*([\d/]+\s*(?:de\s+\w+\s+de\s+)?\d{2,4})', texto_completo, re.IGNORECASE).group(1) if re.search(r'(?:emitida\s+el|Fecha\s+de\s+emisión:)\s*([\d/]+\s*(?:de\s+\w+\s+de\s+)?\d{2,4})', texto_completo, re.IGNORECASE) else "No encontrada"
+        # Fecha genérica
+        todas_las_fechas = re.findall(r'(\d{2}/\d{2}/\d{2,4})', texto_completo)
+        fecha = todas_las_fechas[0] if todas_las_fechas else "No encontrada"
         dias = int(re.search(r'(\d+)\s*días', texto_completo).group(1)) if re.search(r'(\d+)\s*días', texto_completo) else 0
         excedente = abs(float(re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE).group(1).replace(',', '.'))) if re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE) else 0.0
         total_real = float(re.search(r'(?:Subtotal|Importe\s+total|Total\s+factura)\s*:?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE).group(1).replace(',', '.')) if re.search(r'(?:Subtotal|Importe\s+total|Total\s+factura)\s*:?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE) else 0.0
 
     return {"Fecha": fecha, "Días": dias, "Potencia (kW)": potencia, "Consumo Punta (kWh)": consumos['punta'], "Consumo Llano (kWh)": consumos['llano'], "Consumo Valle (kWh)": consumos['valle'], "Excedente (kWh)": excedente, "Total Real": round(total_real, 2)}
 
-# --- INTERFAZ STREAMLIT (Sigue igual) ---
+# El resto del código Streamlit (configuración, carga de archivos, tablas, descarga) sigue igual.
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 excel_path = "tarifas_companias.xlsx"
