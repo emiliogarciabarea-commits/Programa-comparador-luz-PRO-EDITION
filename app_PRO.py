@@ -149,29 +149,23 @@ def extraer_datos_factura(pdf_input):
         "Total Real": round(total_real, 2)
     }
 
-def procesar_todo(archivos_pdf):
+# NUEVA FUNCIÓN: Lógica de cálculo puro (separada de la extracción de PDFs)
+def calcular_ahorro_desde_df(df_resumen_pdfs):
     excel_path = "tarifas_companias.xlsx"
-    if not archivos_pdf:
-        return "Error: No has subido archivos.", None, None, None, None
+    if df_resumen_pdfs is None or df_resumen_pdfs.empty:
+        return "Error: No hay datos para calcular.", None, None, None, None
     
     if not os.path.exists(excel_path):
         return f"Error: No se encuentra {excel_path}", None, None, None, None
 
-    datos_facturas = []
-    for f in archivos_pdf:
-        try:
-            res = extraer_datos_factura(f)
-            res['Archivo'] = os.path.basename(f.name)
-            datos_facturas.append(res)
-        except Exception as e:
-            print(f"Error en {f.name}: {e}")
-
-    if not datos_facturas:
-        return "No se extrajeron datos.", None, None, None, None
-
-    df_resumen_pdfs = pd.DataFrame(datos_facturas)
     df_tarifas = pd.read_excel(excel_path)
     resultados_finales = []
+
+    # Nos aseguramos de que las columnas numéricas sean float tras la edición manual
+    columnas_num = ["Días", "Potencia (kW)", "Consumo Punta (kWh)", "Consumo Llano (kWh)", "Consumo Valle (kWh)", "Excedente (kWh)", "Total Real"]
+    for col in columnas_num:
+        if col in df_resumen_pdfs.columns:
+            df_resumen_pdfs[col] = pd.to_numeric(df_resumen_pdfs[col], errors='coerce').fillna(0.0)
 
     for _, fact in df_resumen_pdfs.iterrows():
         resultados_finales.append({
@@ -217,9 +211,43 @@ def procesar_todo(archivos_pdf):
     with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
         df_comp.to_excel(writer, index=False, sheet_name='Detalle')
         ranking_total.to_excel(writer, index=False, sheet_name='Ranking')
-        df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos_Originales')
+        df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos_Analizados')
 
-    return f"Mejor opción: {mejor_cia}", mejor_ahorro, df_resumen_pdfs, df_comp, output_path
+    # NOTA: df_resumen_pdfs no se devuelve aquí porque ya es un input, gr.Dataframe lo actualiza visualmente
+    return f"Mejor opción: {mejor_cia}", mejor_ahorro, df_comp, output_path
+
+# Función original modificada: Solo extrae datos de los PDFs y llama al primer cálculo
+def procesar_todo(archivos_pdf):
+    if not archivos_pdf:
+        return "Error: No has subido archivos.", None, None, None, None
+
+    datos_facturas = []
+    for f in archivos_pdf:
+        try:
+            res = extraer_datos_factura(f)
+            res['Archivo'] = os.path.basename(f.name)
+            datos_facturas.append(res)
+        except Exception as e:
+            print(f"Error en {f.name}: {e}")
+
+    if not datos_facturas:
+        return "No se extrajeron datos de los PDFs.", None, None, None, None
+
+    # Pasamos los PDFs extraídos a un DataFrame
+    df_ext = pd.DataFrame(datos_facturas)
+    
+    # Llamamos a la lógica de cálculo puro pasándole este DataFrame
+    txt_cia, txt_ahorro, d_comp, f_out = calcular_ahorro_desde_df(df_ext)
+    
+    # Devolvemos todo (incluyendo el DataFrame para la tabla editable)
+    return txt_cia, txt_ahorro, df_ext, d_comp, f_out
+
+# Función para el botón Recalcular: Solo toma la tabla y recalcula
+def recalcular(df_editable):
+    # Reutilizamos la lógica de cálculo puro
+    txt_cia, txt_ahorro, d_comp, f_out = calcular_ahorro_desde_df(df_editable)
+    # Devolvemos solo las salidas numéricas y archivos, no la tabla de entrada
+    return txt_cia, txt_ahorro, d_comp, f_out
 
 # --- INTERFAZ GRADIO ---
 with gr.Blocks(title="Comparador Energético PRO") as demo:
@@ -228,7 +256,8 @@ with gr.Blocks(title="Comparador Energético PRO") as demo:
     with gr.Row():
         pdf_files = gr.File(label="Sube tus facturas PDF", file_count="multiple", file_types=[".pdf"])
     
-    btn = gr.Button("🔍 Iniciar Análisis", variant="primary")
+    # Botón principal (mantenido igual)
+    btn_analizar = gr.Button("🔍 Iniciar Análisis (Leer PDFs)", variant="primary")
     
     with gr.Row():
         res_cia = gr.Textbox(label="🏆 Ganadora")
@@ -236,16 +265,29 @@ with gr.Blocks(title="Comparador Energético PRO") as demo:
     
     with gr.Tabs():
         with gr.TabItem("📋 Datos Extraídos"):
-            out_resumen = gr.Dataframe()
+            # CAMBIO 1: interactive=True para que sea editable
+            out_resumen = gr.Dataframe(interactive=True, label="Haz doble clic en una celda para corregir datos mal leídos")
+            
+            # CAMBIO 2: Nuevo botón para recalcular tras la edición manual
+            btn_recalcular = gr.Button("🔄 Recalcular con datos manuales de la tabla", variant="secondary")
+
         with gr.TabItem("📊 Comparativa Completa"):
             out_comp = gr.Dataframe()
         with gr.TabItem("📥 Descargar"):
             out_file = gr.File(label="Descargar Informe Excel")
 
-    btn.click(
+    # Acción del botón principal (mantenida igual)
+    btn_analizar.click(
         fn=procesar_todo,
         inputs=pdf_files,
         outputs=[res_cia, res_ahorro, out_resumen, out_comp, out_file]
+    )
+
+    # Acción del nuevo botón Recalcular (Toma la tabla editable como input)
+    btn_recalcular.click(
+        fn=recalcular,
+        inputs=out_resumen, # Toma la tabla editable
+        outputs=[res_cia, res_ahorro, out_comp, out_file] # Actualiza el ahorro y descargas
     )
 
 if __name__ == "__main__":
