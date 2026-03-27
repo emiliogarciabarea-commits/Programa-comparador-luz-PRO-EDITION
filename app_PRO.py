@@ -172,7 +172,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-st.set_page_config(page_title="Energy Advisor App", layout="wide")
+st.set_page_config(page_title="Energetika Ahorro", layout="wide")
 
 # --- ESTILOS CSS PARA INTERFAZ TIPO APP ---
 st.markdown("""
@@ -199,6 +199,10 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# Añadimos el Logo de Energetika en la parte superior
+if os.path.exists("Logo_Energetika.jpg"):
+    st.image("Logo_Energetika.jpg", width=300)
+
 st.title("⚡ Energetika Ahorro")
 st.markdown("---")
 
@@ -208,6 +212,7 @@ if not os.path.exists(excel_path):
     st.error(f"Error: No se encuentra el archivo '{excel_path}'")
 else:
     with st.sidebar:
+        # Añadimos el símbolo de la batería al header del panel de control
         st.header("Panel de Control", icon="🔋")
         uploaded_files = st.file_uploader("Subir Facturas (PDF)", type="pdf", accept_multiple_files=True)
 
