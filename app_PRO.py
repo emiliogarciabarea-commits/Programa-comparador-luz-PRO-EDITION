@@ -199,7 +199,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("⚡ Energy Advisor Pro")
+st.title("⚡ Energetika Pro")
 st.markdown("---")
 
 excel_path = "tarifas_companias.xlsx"
