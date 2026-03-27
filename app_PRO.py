@@ -208,7 +208,7 @@ if not os.path.exists(excel_path):
     st.error(f"Error: No se encuentra el archivo '{excel_path}'")
 else:
     with st.sidebar:
-        st.header("Panel de Control")
+        st.header("Panel de Control", icon="🔋")
         uploaded_files = st.file_uploader("Subir Facturas (PDF)", type="pdf", accept_multiple_files=True)
 
     if uploaded_files:
