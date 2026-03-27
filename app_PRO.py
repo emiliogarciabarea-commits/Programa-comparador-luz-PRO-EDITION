@@ -199,7 +199,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("⚡ Energetika Pro")
+st.title("⚡ Energetika Ahorro")
 st.markdown("---")
 
 excel_path = "tarifas_companias.xlsx"
@@ -208,7 +208,7 @@ if not os.path.exists(excel_path):
     st.error(f"Error: No se encuentra el archivo '{excel_path}'")
 else:
     with st.sidebar:
-        st.header("Panel de Control", icon="🔋")
+        st.header("Panel de Control")
         uploaded_files = st.file_uploader("Subir Facturas (PDF)", type="pdf", accept_multiple_files=True)
 
     if uploaded_files:
