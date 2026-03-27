@@ -172,51 +172,15 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-st.set_page_config(page_title="Energetika Ahorro", layout="wide")
-
-# --- ESTILOS CSS PARA INTERFAZ TIPO APP ---
-st.markdown("""
-    <style>
-    .stApp { background-color: #0e1117; color: #ffffff; }
-    [data-testid="stSidebar"] { background-color: #111827; border-right: 1px solid #374151; }
-    
-    /* Tarjetas de resultados principales */
-    .result-card {
-        background-color: #064e3b; 
-        padding: 24px;
-        border-radius: 12px;
-        border-left: 5px solid #10b981;
-        margin-bottom: 20px;
-        color: white !important;
-    }
-    .result-card h2, .result-card h3, .result-card small { color: white !important; }
-    
-    /* Títulos generales */
-    h1, h2, h3 { color: #3b82f6 !important; }
-    
-    /* Estilo de la tabla de resultados (Dataframe) */
-    .stDataFrame { background-color: #1f2937; border-radius: 8px; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# Cabecera con título a la izquierda y logo a la derecha
-col_tit, col_logo = st.columns([3, 1])
-with col_tit:
-    st.title("⚡ Energetika Ahorro")
-with col_logo:
-    if os.path.exists("Logo_Energetika.jpg"):
-        st.image("Logo_Energetika.jpg", width=200)
-
-st.markdown("---")
+st.set_page_config(page_title="Comparador Energético", layout="wide")
+st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
 excel_path = "tarifas_companias.xlsx"
 
 if not os.path.exists(excel_path):
-    st.error(f"Error: No se encuentra el archivo '{excel_path}'")
+    st.error(f"No se encuentra el archivo '{excel_path}' en el repositorio.")
 else:
-    with st.sidebar:
-        st.header("Panel de Control :battery:")
-        uploaded_files = st.file_uploader("Subir Facturas (PDF)", type="pdf", accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Sube tus facturas PDF", type="pdf", accept_multiple_files=True)
 
     if uploaded_files:
         datos_facturas = []
@@ -230,7 +194,7 @@ else:
 
         if datos_facturas:
             df_resumen_pdfs = pd.DataFrame(datos_facturas)
-            with st.expander("📝 Revisar y Editar Datos Extraídos", expanded=False):
+            with st.expander("🔍 Ver y corregir datos extraídos", expanded=True):
                 df_resumen_pdfs = st.data_editor(df_resumen_pdfs, use_container_width=True, hide_index=True)
 
             df_tarifas = pd.read_excel(excel_path)
@@ -239,7 +203,7 @@ else:
             for _, fact in df_resumen_pdfs.iterrows():
                 resultados_finales.append({
                     "Mes/Fecha": fact['Fecha'],
-                    "Compañía/Tarifa": "📍 FACTURA ACTUAL",
+                    "Compañía/Tarifa": "📍 TU FACTURA ACTUAL",
                     "Coste (€)": fact['Total Real'],
                     "Ahorro": 0.0,
                     "Dias_Factura": fact['Días']
@@ -272,53 +236,39 @@ else:
 
             df_comp = pd.DataFrame(resultados_finales).dropna(subset=['Coste (€)'])
             df_comp = df_comp.sort_values(by=["Mes/Fecha", "Ahorro"], ascending=[True, False])
-            
-            df_solo_ofertas = df_comp[df_comp["Compañía/Tarifa"] != "📍 FACTURA ACTUAL"]
-            ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index().sort_values(by="Ahorro", ascending=False)
+            df_solo_ofertas = df_comp[df_comp["Compañía/Tarifa"] != "📍 TU FACTURA ACTUAL"]
+            ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
+            ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
 
-            # --- HEADER VISUAL DE RESULTADOS ---
-            if not ranking_total.empty:
-                m_ganadora = ranking_total.iloc[0]['Compañía/Tarifa']
-                m_ahorro = round(ranking_total.iloc[0]['Ahorro'], 2)
-                
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.markdown(f"""<div class="result-card"><small>COMPAÑÍA RECOMENDADA</small><h2 style="margin:0;">{m_ganadora}</h2></div>""", unsafe_allow_html=True)
-                with c2:
-                    st.markdown(f"""<div class="result-card"><small>AHORRO TOTAL PROYECTADO</small><h2 style="margin:0;">+{m_ahorro} €</h2></div>""", unsafe_allow_html=True)
-
-            # --- TABLA DE COMPARATIVA CON COLORES DINÁMICOS ---
-            st.subheader("📊 Tabla Comparativa Detallada")
-
-            def style_ahorro_col(val):
-                if isinstance(val, str):
-                    if "+" in val: return 'color: #10b981; font-weight: bold'
-                    if "-" in val: return 'color: #ef4444; font-weight: bold'
-                return ''
-
-            df_display = df_comp.copy()
-            df_display['Ahorro'] = df_display['Ahorro'].apply(lambda x: f"+{x} €" if x > 0 else (f"{x} €" if x < 0 else "0.0 €"))
-
-            st.dataframe(
-                df_display.drop(columns=['Dias_Factura'], errors='ignore').style.applymap(style_ahorro_col, subset=['Ahorro']),
-                use_container_width=True,
-                hide_index=True
-            )
-
-            # --- EXPORTACIÓN DE INFORME (4 HOJAS) ---
-            st.markdown("---")
+            st.divider()
             
             df_precios_ganadora = pd.DataFrame()
             if not ranking_total.empty:
                 mejor_opcion_nombre = ranking_total.iloc[0]['Compañía/Tarifa']
                 fila_ganadora = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre]
+                
                 if not fila_ganadora.empty:
                     df_precios_ganadora = pd.DataFrame({
                         "Concepto": ["Compañía Ganadora", "P1 Potencia (€/kW/día)", "P2 Potencia (€/kW/día)", 
                                     "Energía Punta (€/kWh)", "Energía Llano (€/kWh)", "Energía Valle (€/kWh)", "Excedente (€/kWh)"],
-                        "Valor": [mejor_opcion_nombre, fila_ganadora.iloc[0, 1], fila_ganadora.iloc[0, 2],
-                                    fila_ganadora.iloc[0, 3], fila_ganadora.iloc[0, 4], fila_ganadora.iloc[0, 5], fila_ganadora.iloc[0, 6]]
+                        "Valor": [
+                            mejor_opcion_nombre,
+                            fila_ganadora.iloc[0, 1],
+                            fila_ganadora.iloc[0, 2],
+                            fila_ganadora.iloc[0, 3],
+                            fila_ganadora.iloc[0, 4],
+                            fila_ganadora.iloc[0, 5],
+                            fila_ganadora.iloc[0, 6]
+                        ]
                     })
+                
+                st.subheader("🏆 Resultado del Análisis")
+                c1, c2 = st.columns(2)
+                with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
+                with c2: st.metric(label="Ahorro Total Acumulado", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €")
+
+            st.subheader("📊 Comparativa Detallada por Factura")
+            st.dataframe(df_comp.drop(columns=['Dias_Factura'], errors='ignore'), use_container_width=True, hide_index=True)
 
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
@@ -329,9 +279,9 @@ else:
                     df_precios_ganadora.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
 
             st.download_button(
-                label="📥 DESCARGAR INFORME COMPLETO (4 HOJAS)",
+                label="📥 Descargar Informe Completo (4 Hojas)",
                 data=buffer_excel.getvalue(),
-                file_name="estudio_energetico_pro.xlsx",
+                file_name="estudio_ahorro_energetico.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
