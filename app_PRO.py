@@ -175,24 +175,29 @@ def extraer_datos_factura(pdf_path):
 # --- CONFIGURACIÓN DE LA APP (ESTILO) ---
 st.set_page_config(page_title="Energy Advisor Pro", layout="wide", initial_sidebar_state="expanded")
 
-# Inyectar CSS para interfaz tipo App y Colores
+# Inyectar CSS para interfaz tipo App y Colores (Fondo Verde, Texto Blanco)
 st.markdown("""
     <style>
     /* Fondo General */
     .stApp { background-color: #0e1117; color: #ffffff; }
     
-    /* Tarjetas de resultados */
-    .result-card {
-        background-color: #1f2937;
+    /* Tarjetas de resultados principales (VERDE) */
+    .result-card-winner {
+        background-color: #10b981; /* Verde esmeralda */
         padding: 20px;
         border-radius: 15px;
-        border: 1px solid #374151;
+        border: 2px solid #059669;
         margin-bottom: 20px;
+        color: #ffffff !important;
     }
     
-    /* Estilos de Ahorro */
-    .ahorro-positivo { color: #10b981 !important; font-weight: bold; font-size: 1.1em; }
-    .ahorro-negativo { color: #ef4444 !important; font-weight: bold; font-size: 1.1em; }
+    .result-card-winner h2, .result-card-winner small {
+        color: #ffffff !important;
+    }
+    
+    /* Estilos de Ahorro en la tabla */
+    .ahorro-positivo { color: #10b981 !important; font-weight: bold; }
+    .ahorro-negativo { color: #ef4444 !important; font-weight: bold; }
     
     /* Títulos */
     h1, h2, h3 { color: #3b82f6 !important; }
@@ -232,7 +237,6 @@ else:
             
             with st.container():
                 st.subheader("🔍 Datos Detectados")
-                # El editor de datos ya tiene fondo oscuro nativo en modo dark
                 df_resumen_pdfs = st.data_editor(df_resumen_pdfs, use_container_width=True, hide_index=True)
 
             df_tarifas = pd.read_excel(excel_path)
@@ -286,40 +290,33 @@ else:
                 mejor_opcion_nombre = ranking_total.iloc[0]['Compañía/Tarifa']
                 mejor_ahorro = round(ranking_total.iloc[0]['Ahorro'], 2)
                 
-                # Layout de App: Métrica y Ganador
+                # Layout de App: Tarjetas Verdes con letras blancas
                 col_m1, col_m2 = st.columns(2)
                 with col_m1:
                     st.markdown(f"""
-                    <div class="result-card">
+                    <div class="result-card-winner">
                         <small>MEJOR OPCIÓN ENCONTRADA</small>
                         <h2 style='margin:0;'>{mejor_opcion_nombre}</h2>
                     </div>
                     """, unsafe_allow_html=True)
                 with col_m2:
                     st.markdown(f"""
-                    <div class="result-card">
+                    <div class="result-card-winner">
                         <small>AHORRO TOTAL ESTIMADO</small>
-                        <h2 style='margin:0; color:#10b981;'>+{mejor_ahorro} €</h2>
+                        <h2 style='margin:0;'>+{mejor_ahorro} €</h2>
                     </div>
                     """, unsafe_allow_html=True)
 
             # --- TABLA COMPARATIVA CON COLORES DINÁMICOS ---
             st.subheader("📊 Tabla Comparativa de Mercado")
             
-            def style_ahorro(val):
-                if val > 0: return 'color: #10b981' # Verde
-                elif val < 0: return 'color: #ef4444' # Rojo
-                return ''
-
             def format_ahorro(val):
                 if val > 0: return f"+{val} €"
                 return f"{val} €"
 
-            # Pre-formateamos el ahorro para que incluya el signo +
             df_styled = df_comp.copy()
             df_styled['Ahorro'] = df_styled['Ahorro'].apply(format_ahorro)
             
-            # Mostramos la tabla. El fondo se mantiene oscuro gracias al tema 'dark' configurado
             st.dataframe(
                 df_styled.drop(columns=['Dias_Factura'], errors='ignore'), 
                 use_container_width=True, 
