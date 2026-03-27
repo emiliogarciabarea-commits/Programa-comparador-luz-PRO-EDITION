@@ -213,7 +213,7 @@ if not os.path.exists(excel_path):
 else:
     with st.sidebar:
         # Añadimos el símbolo de la batería al header del panel de control
-        st.header("Panel de Control", icon="🔋")
+        st.header("Panel de Control :battery:")
         uploaded_files = st.file_uploader("Subir Facturas (PDF)", type="pdf", accept_multiple_files=True)
 
     if uploaded_files:
