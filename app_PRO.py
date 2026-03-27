@@ -199,11 +199,14 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Añadimos el Logo de Energetika en la parte superior
-if os.path.exists("Logo_Energetika.jpg"):
-    st.image("Logo_Energetika.jpg", width=300)
+# Cabecera con título a la izquierda y logo a la derecha
+col_tit, col_logo = st.columns([3, 1])
+with col_tit:
+    st.title("⚡ Energetika Ahorro")
+with col_logo:
+    if os.path.exists("Logo_Energetika.jpg"):
+        st.image("Logo_Energetika.jpg", width=200)
 
-st.title("⚡ Energetika Ahorro")
 st.markdown("---")
 
 excel_path = "tarifas_companias.xlsx"
@@ -212,7 +215,6 @@ if not os.path.exists(excel_path):
     st.error(f"Error: No se encuentra el archivo '{excel_path}'")
 else:
     with st.sidebar:
-        # Añadimos el símbolo de la batería al header del panel de control
         st.header("Panel de Control :battery:")
         uploaded_files = st.file_uploader("Subir Facturas (PDF)", type="pdf", accept_multiple_files=True)
 
@@ -295,7 +297,6 @@ else:
                 return ''
 
             df_display = df_comp.copy()
-            # Formatear la columna para mostrar + y color en la tabla
             df_display['Ahorro'] = df_display['Ahorro'].apply(lambda x: f"+{x} €" if x > 0 else (f"{x} €" if x < 0 else "0.0 €"))
 
             st.dataframe(
