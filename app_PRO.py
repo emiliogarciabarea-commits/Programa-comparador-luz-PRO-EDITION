@@ -47,52 +47,41 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_total_energies:
-        # 1. Fecha y Días (Extracción estándar)
+        # 1. Fecha y Días
         m_fecha = re.search(r'Fecha\s+emisión:\s*([\d.]{10})', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
         m_dias = re.search(r'(\d+)\s+día\(s\)', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
 
-        # 2. Potencia (kW)
-        m_pot_kW = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
-        potencia = float(m_pot_kW.group(1).replace(',', '.')) if m_pot_kW else 0.0
+        # 2. Potencia kW
+        m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
+        potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 3. ATAQUE POR BLOQUES (Como en Endesa/Naturgy)
-        # Buscamos el valor de Potencia y el de Energía por separado
-        def extraer_valor_bloque(keyword, texto):
-            # Busca la sección y captura el "Total sin IVA" más cercano a esa palabra clave
-            patron = rf'{keyword}.*?Total\s+sin\s+IVA\s*([\d,.]+)'
-            match = re.search(patron, texto, re.IGNORECASE | re.DOTALL)
-            if match:
-                val = match.group(1).replace('.', '').replace(',', '.')
-                return float(val)
-            return 0.0
+        # 3. ATAQUE DIRECTO A LOS VALORES (Suma de Potencia + Consumo)
+        # Función de limpieza agresiva tipo Endesa
+        def limpiar_te(valor_sucio):
+            if not valor_sucio: return 0.0
+            v = valor_sucio.replace(" ", "").replace(".", "").replace(",", ".")
+            try: return float(v)
+            except: return 0.0
 
-        val_potencia = extraer_valor_bloque('Importe\s+por\s+potencia', texto_completo)
-        val_energia = extraer_valor_bloque('Importe\s+por\s+energía', texto_completo)
+        # Buscamos el valor numérico justo después de cada "Total sin IVA"
+        # El primer "Total sin IVA" suele ser Consumo y el segundo Potencia (o viceversa)
+        bloques_sin_iva = re.findall(r'Total\s+sin\s+IVA\s*([\d\s.,]+)', texto_completo, re.IGNORECASE)
         
-        # El Total Real es estrictamente la suma de estos dos
-        total_real = val_potencia + val_energia
+        # Sumamos los dos primeros (que corresponden a Energía y Potencia)
+        val_1 = limpiar_te(bloques_sin_iva[0]) if len(bloques_sin_iva) > 0 else 0.0
+        val_2 = limpiar_te(bloques_sin_iva[1]) if len(bloques_sin_iva) > 1 else 0.0
+        
+        total_real = val_1 + val_2
 
         # 4. Consumos (kWh)
-        def extraer_kwh(tipo, texto):
-            patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
-            matches = re.findall(patron, texto, re.IGNORECASE)
-            if matches:
-                return float(matches[-1].replace('.', '').replace(',', '.'))
-            return 0.0
-
+        m_kwh = re.search(r'(\d+)\s*kWh\s+[\d,.]+\s*€/kWh', texto_completo)
         consumos = {
-            'punta': extraer_kwh('Punta', texto_completo),
-            'llano': extraer_kwh('Llano', texto_completo),
-            'valle': extraer_kwh('Valle', texto_completo)
+            'punta': float(m_kwh.group(1)) if m_kwh else 0.0,
+            'llano': 0.0,
+            'valle': 0.0
         }
-        
-        # Fallback para tarifas de un solo precio
-        if sum(consumos.values()) == 0:
-            m_gen = re.search(r'(\d+)\s*kWh\s+[\d,.]+\s*€/kWh', texto_completo)
-            if m_gen: consumos['punta'] = float(m_gen.group(1))
-        
         excedente = 0.0
 
     elif es_endesa_luz:
@@ -206,7 +195,6 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# El resto del código Streamlit (Excel, comparativa, etc.) se mantiene intacto.
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
