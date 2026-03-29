@@ -59,30 +59,31 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # Función para capturar el valor a la derecha de la palabra "Total" en cada bloque
-        def limpiar_monto(valor_str):
-            if not valor_str: return 0.0
-            # Limpieza total: quita puntos de miles y cambia coma por punto
-            limpio = valor_str.replace(".", "").replace(",", ".").strip()
-            try: return float(limpio)
-            except: return 0.0
-
-        # 4. Total Real: Buscamos específicamente los totales de la derecha de la tabla
-        # Buscamos "Total potencia" y "Total consumo" para capturar el importe final de cada bloque
-        m_pot_euros = re.search(r'Total\s+potencia\s+([\d,.]+)', texto_completo, re.IGNORECASE)
-        m_cons_euros = re.search(r'Total\s+consumo\s+([\d,.]+)', texto_completo, re.IGNORECASE)
-        
-        val_potencia = limpiar_monto(m_pot_euros.group(1)) if m_pot_euros else 0.0
-        val_consumo = limpiar_monto(m_cons_euros.group(1)) if m_cons_euros else 0.0
-        total_real = val_potencia + val_consumo
-
-        # 5. Consumos (kWh) - Evitando lecturas
-        def extraer_kwh(tipo, texto):
-            # En TotalEnergies, el consumo real suele venir indicado como "Consumo [Tramo]"
-            patron = rf'Consumo\s+{tipo}.*?([\d,.]+)\s*kWh'
+        # Función de limpieza robusta para importes
+        def limpiar_monto_totalenergies(patron, texto):
             match = re.search(patron, texto, re.IGNORECASE)
             if match:
-                return limpiar_monto(match.group(1))
+                valor_sucio = match.group(1)
+                # Eliminamos puntos de miles y cambiamos coma por punto decimal
+                valor_limpio = valor_sucio.replace(".", "").replace(",", ".")
+                try: return float(valor_limpio)
+                except: return 0.0
+            return 0.0
+
+        # 4. Total Real: Extraemos la suma de los totales de la derecha (Potencia + Consumo)
+        # Esto ignora el Alquiler de contador, servicios y otros conceptos no comparables
+        val_potencia_euros = limpiar_monto_totalenergies(r'Total\s+potencia\s+([\d,.]+)', texto_completo)
+        val_consumo_euros = limpiar_monto_totalenergies(r'Total\s+consumo\s+([\d,.]+)', texto_completo)
+        total_real = val_potencia_euros + val_consumo_euros
+
+        # 5. Consumos (kWh)
+        def extraer_kwh(tipo, texto):
+            patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
+            matches = re.findall(patron, texto, re.IGNORECASE)
+            if matches:
+                v = matches[-1].replace(".", "").replace(",", ".")
+                try: return float(v)
+                except: return 0.0
             return 0.0
 
         consumos = {
