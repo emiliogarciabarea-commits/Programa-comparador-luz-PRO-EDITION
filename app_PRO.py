@@ -59,16 +59,19 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. TOTAL REAL (Suma de los valores bajo 'Total sin IVA')
-        # Buscamos todos los importes que sigan a "Total sin IVA"
-        importes = re.findall(r'Total\s+sin\s+IVA\s*[\n\s]*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        # 4. TOTAL REAL (Suma de los valores de las tablas: Potencia y Consumo)
+        # Buscamos específicamente el número que aparece debajo de 'Total sin IVA' en las tablas
+        importes_tablas = re.findall(r'Total\s+sin\s+IVA\s*[\n\s]*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
         total_real = 0.0
-        if importes:
-            # Sumamos los dos primeros (Potencia y Consumo) para evitar sumar conceptos de gas o servicios si los hubiera
-            for imp in importes[:2]:
-                total_real += float(imp.replace('.', '').replace(',', '.'))
-        
+        # Según tu factura, el primer valor es Potencia (2,42) y el segundo Consumo (13,49)
+        if len(importes_tablas) >= 2:
+            val1 = float(importes_tablas[0].replace('.', '').replace(',', '.'))
+            val2 = float(importes_tablas[1].replace('.', '').replace(',', '.'))
+            total_real = val1 + val2
+        elif len(importes_tablas) == 1:
+            total_real = float(importes_tablas[0].replace('.', '').replace(',', '.'))
+
         # 5. Consumos (kWh)
         def extraer_kwh(tipo, texto):
             patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
@@ -87,7 +90,6 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0
 
     elif es_endesa_luz:
-        # (Resto del código de Endesa, Repsol, Iberdrola y lógica genérica exactamente igual...)
         m_fecha_etiqueta = re.search(r'Fecha\s+emisión\s+factura:\s*([\d/]{10})', texto_completo, re.IGNORECASE)
         if m_fecha_etiqueta:
             fecha = m_fecha_etiqueta.group(1)
@@ -198,7 +200,6 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# El resto del código de Streamlit (Interfaz, carga de Excel, comparador) se mantiene 100% igual.
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
