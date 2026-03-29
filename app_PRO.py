@@ -47,7 +47,7 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_total_energies:
-        # 1. Fecha
+        # 1. Fecha: Formato DD.MM.AAAA
         m_fecha = re.search(r'Fecha\s+emisión:\s*([\d.]{10})', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
 
@@ -59,23 +59,15 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. TOTAL REAL = SUMA DE POTENCIA + CONSUMO
-        # Buscamos los importes en euros de la sección de electricidad
-        def extraer_importe_euro(patron, texto):
-            match = re.search(patron, texto, re.IGNORECASE)
-            if match:
-                val = match.group(1).replace('.', '').replace(',', '.')
-                return float(val)
-            return 0.0
-
-        imp_potencia = extraer_importe_euro(r'Importe\s+por\s+potencia.*?\s+([\d,.]+)\s*€', texto_completo)
-        imp_consumo = extraer_importe_euro(r'Importe\s+por\s+energía.*?\s+([\d,.]+)\s*€', texto_completo)
+        # 4. TOTAL REAL (Suma de Potencia y Energía/Consumo)
+        # Extraemos el importe de Potencia y el de Energía por separado
+        m_imp_pot = re.search(r'Importe\s+por\s+potencia.*?\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_imp_ene = re.search(r'Importe\s+por\s+energía.*?\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
-        # Si no encuentra los anteriores, buscamos el "Total sin IVA" de la tabla
-        total_real = imp_potencia + imp_consumo
-        if total_real == 0:
-            m_total_tabla = re.search(r'Total\s+sin\s+IVA[\s\n]+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-            total_real = float(m_total_tabla.group(1).replace('.', '').replace(',', '.')) if m_total_tabla else 0.0
+        val_pot = float(m_imp_pot.group(1).replace('.', '').replace(',', '.')) if m_imp_pot else 0.0
+        val_ene = float(m_imp_ene.group(1).replace('.', '').replace(',', '.')) if m_imp_ene else 0.0
+        
+        total_real = val_pot + val_ene
 
         # 5. Consumos (kWh)
         def extraer_kwh(tipo, texto):
@@ -172,6 +164,7 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0
 
     else:
+        # Lógica genérica
         patrones_consumo = {
             'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh'],
             'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh'],
