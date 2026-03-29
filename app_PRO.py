@@ -60,34 +60,35 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # Función de limpieza estilo Endesa para evitar errores de string a float
-        def limpiar_valor_te(patron, texto):
-            match = re.search(patron, texto, re.IGNORECASE)
-            if match:
-                valor_sucio = match.group(1)
-                # Elimina puntos de miles, espacios y cambia coma por punto decimal
-                valor_limpio = valor_sucio.replace(" ", "").replace(".", "").replace(",", ".")
-                try: return float(valor_limpio)
-                except: return 0.0
-            return 0.0
+        # Función de limpieza robusta (estilo Endesa)
+        def limpiar_float(valor_str):
+            if not valor_str: return 0.0
+            limpio = valor_str.replace(" ", "").replace(".", "").replace(",", ".")
+            try: return float(limpio)
+            except: return 0.0
 
-        # 4. Total Real: Suma de Potencia (€) y Consumo (€)
-        val_potencia_eur = limpiar_valor_te(r'Por\s+la\s+potencia\s+contratada\s+([\d\s.,]+)€', texto_completo)
-        val_consumo_eur = limpiar_valor_te(r'Por\s+la\s+energía\s+consumida\s+([\d\s.,]+)€', texto_completo)
-        total_real = val_potencia_eur + val_consumo_eur
+        # 4. Total Real: Suma de Importe Potencia (€) + Importe Consumo (€)
+        # Buscamos los importes que aparecen en el resumen de la derecha de la factura
+        m_imp_pot = re.search(r'Importe\s+por\s+potencia\s+.*?\s+([\d\s.,]+)€', texto_completo, re.IGNORECASE)
+        m_imp_cons = re.search(r'Importe\s+por\s+consumo\s+.*?\s+([\d\s.,]+)€', texto_completo, re.IGNORECASE)
+        
+        val_pot_eur = limpiar_float(m_imp_pot.group(1)) if m_imp_pot else 0.0
+        val_cons_eur = limpiar_float(m_imp_cons.group(1)) if m_imp_cons else 0.0
+        total_real = val_pot_eur + val_cons_eur
 
-        # 5. Consumos (kWh): Se busca el valor antes de 'kWh' en las líneas de detalle
-        def extraer_kwh_te(tipo, texto):
-            # El consumo suele aparecer como "Punta: 1.234,56 kWh"
-            m = re.search(rf'{tipo}:\s*([\d,.]+)\s*kWh', texto, re.IGNORECASE)
-            if m:
-                return float(m.group(1).replace(".", "").replace(",", "."))
+        # 5. Consumos (kWh)
+        def extraer_consumo_total_energies(tipo, texto):
+            patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
+            matches = re.findall(patron, texto, re.IGNORECASE)
+            if matches:
+                # El consumo es el último valor del match (evita las lecturas de contador)
+                return limpiar_float(matches[-1]) 
             return 0.0
 
         consumos = {
-            'punta': extraer_kwh_te('Punta', texto_completo),
-            'llano': extraer_kwh_te('Llano', texto_completo),
-            'valle': extraer_kwh_te('Valle', texto_completo)
+            'punta': extraer_consumo_total_energies('Punta', texto_completo),
+            'llano': extraer_consumo_total_energies('Llano', texto_completo),
+            'valle': extraer_consumo_total_energies('Valle', texto_completo)
         }
         excedente = 0.0
 
