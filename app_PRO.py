@@ -47,33 +47,35 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_total_energies:
-        # 1. Fecha y Días
+        # 1. Fecha y Días (Extracción estándar)
         m_fecha = re.search(r'Fecha\s+emisión:\s*([\d.]{10})', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
         m_dias = re.search(r'(\d+)\s+día\(s\)', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
 
-        # 2. Potencia contratada (kW)
-        m_pot_contratada = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
-        potencia = float(m_pot_contratada.group(1).replace(',', '.')) if m_pot_contratada else 0.0
+        # 2. Potencia (kW)
+        m_pot_kW = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
+        potencia = float(m_pot_kW.group(1).replace(',', '.')) if m_pot_kW else 0.0
 
-        # 3. EXTRACCIÓN AGRESIVA DE IMPORTES (Suma Potencia + Consumo)
-        # Buscamos los bloques específicos para no sumar Alquiler o Bono Social
-        bloque_pot = re.search(r'Importe\s+por\s+potencia.*?Total\s+sin\s+IVA\s*([\d,.]+)', texto_completo, re.IGNORECASE | re.DOTALL)
-        bloque_ene = re.search(r'Importe\s+por\s+energía.*?Total\s+sin\s+IVA\s*([\d,.]+)', texto_completo, re.IGNORECASE | re.DOTALL)
-        
-        def limpiar_te(valor_str):
-            if not valor_str: return 0.0
-            return float(valor_str.replace('.', '').replace(',', '.'))
+        # 3. ATAQUE POR BLOQUES (Como en Endesa/Naturgy)
+        # Buscamos el valor de Potencia y el de Energía por separado
+        def extraer_valor_bloque(keyword, texto):
+            # Busca la sección y captura el "Total sin IVA" más cercano a esa palabra clave
+            patron = rf'{keyword}.*?Total\s+sin\s+IVA\s*([\d,.]+)'
+            match = re.search(patron, texto, re.IGNORECASE | re.DOTALL)
+            if match:
+                val = match.group(1).replace('.', '').replace(',', '.')
+                return float(val)
+            return 0.0
 
-        val_potencia = limpiar_te(bloque_pot.group(1)) if bloque_pot else 0.0
-        val_energia = limpiar_te(bloque_ene.group(1)) if bloque_ene else 0.0
+        val_potencia = extraer_valor_bloque('Importe\s+por\s+potencia', texto_completo)
+        val_energia = extraer_valor_bloque('Importe\s+por\s+energía', texto_completo)
         
+        # El Total Real es estrictamente la suma de estos dos
         total_real = val_potencia + val_energia
 
         # 4. Consumos (kWh)
         def extraer_kwh(tipo, texto):
-            # Busca el valor numérico que va antes de 'kWh' en la línea del periodo
             patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
             matches = re.findall(patron, texto, re.IGNORECASE)
             if matches:
@@ -86,15 +88,14 @@ def extraer_datos_factura(pdf_path):
             'valle': extraer_kwh('Valle', texto_completo)
         }
         
-        # Si es tarifa fija (un solo periodo), capturamos el total de kWh del bloque energía
+        # Fallback para tarifas de un solo precio
         if sum(consumos.values()) == 0:
             m_gen = re.search(r'(\d+)\s*kWh\s+[\d,.]+\s*€/kWh', texto_completo)
             if m_gen: consumos['punta'] = float(m_gen.group(1))
-
+        
         excedente = 0.0
 
     elif es_endesa_luz:
-        # (Se mantiene igual que tu código original)
         m_fecha_etiqueta = re.search(r'Fecha\s+emisión\s+factura:\s*([\d/]{10})', texto_completo, re.IGNORECASE)
         if m_fecha_etiqueta:
             fecha = m_fecha_etiqueta.group(1)
@@ -172,7 +173,6 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0
 
     else:
-        # Lógica genérica por defecto
         patrones_consumo = {
             'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh'],
             'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh'],
@@ -206,7 +206,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# --- INTERFAZ STREAMLIT (SIN CAMBIOS) ---
+# El resto del código Streamlit (Excel, comparativa, etc.) se mantiene intacto.
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
