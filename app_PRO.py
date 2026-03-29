@@ -59,18 +59,23 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. TOTAL REAL (Suma de los valores de las tablas: Potencia y Consumo)
-        # Buscamos específicamente el número que aparece debajo de 'Total sin IVA' en las tablas
-        importes_tablas = re.findall(r'Total\s+sin\s+IVA\s*[\n\s]*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        # 4. TOTAL REAL (Suma de los dos "Total sin IVA" de las tablas de desglose)
+        # Buscamos los bloques de Potencia y Energía para no confundir con otros conceptos
+        bloque_potencia = re.search(r'Importe\s+por\s+potencia(.*?Total\s+sin\s+IVA\s*[\d,.]+)', texto_completo, re.IGNORECASE | re.DOTALL)
+        bloque_energia = re.search(r'Importe\s+por\s+energía(.*?Total\s+sin\s+IVA\s*[\d,.]+)', texto_completo, re.IGNORECASE | re.DOTALL)
         
-        total_real = 0.0
-        # Según tu factura, el primer valor es Potencia (2,42) y el segundo Consumo (13,49)
-        if len(importes_tablas) >= 2:
-            val1 = float(importes_tablas[0].replace('.', '').replace(',', '.'))
-            val2 = float(importes_tablas[1].replace('.', '').replace(',', '.'))
-            total_real = val1 + val2
-        elif len(importes_tablas) == 1:
-            total_real = float(importes_tablas[0].replace('.', '').replace(',', '.'))
+        val_pot = 0.0
+        val_ene = 0.0
+        
+        if bloque_potencia:
+            m_val = re.search(r'Total\s+sin\s+IVA\s*([\d,.]+)', bloque_potencia.group(1), re.IGNORECASE)
+            if m_val: val_pot = float(m_val.group(1).replace('.', '').replace(',', '.'))
+            
+        if bloque_energia:
+            m_val = re.search(r'Total\s+sin\s+IVA\s*([\d,.]+)', bloque_energia.group(1), re.IGNORECASE)
+            if m_val: val_ene = float(m_val.group(1).replace('.', '').replace(',', '.'))
+            
+        total_real = val_pot + val_ene
 
         # 5. Consumos (kWh)
         def extraer_kwh(tipo, texto):
