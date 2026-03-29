@@ -56,31 +56,35 @@ def extraer_datos_factura(pdf_path):
         m_dias = re.search(r'(\d+)\s+día\(s\)', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
 
-        # 3. Potencia
+        # 3. Potencia Contratada
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. Total Real (con limpieza de puntos de miles)
-        def limpiar_float(valor_str):
-            if not valor_str: return 0.0
-            # Quita espacios, quita puntos (miles) y cambia coma por punto (decimal)
-            limpio = valor_str.replace(" ", "").replace(".", "").replace(",", ".")
-            try: return float(limpio)
-            except: return 0.0
+        # Función de limpieza robusta (estilo Endesa) para evitar errores de float
+        def limpiar_valor_totalenergies(patron, texto):
+            match = re.search(patron, texto, re.IGNORECASE)
+            if match:
+                valor_sucio = match.group(1)
+                # Elimina puntos de miles, espacios y cambia coma por punto decimal
+                valor_limpio = valor_sucio.replace(" ", "").replace(".", "").replace(",", ".")
+                try: return float(valor_limpio)
+                except: return 0.0
+            return 0.0
 
-        m_total = re.search(r'TOTAL\s+ELECTRICIDAD.*?([\d\s.,]+)€', texto_completo, re.IGNORECASE | re.DOTALL)
-        total_real = limpiar_float(m_total.group(1)) if m_total else 0.0
+        # 4. Total Real: Suma de Potencia y Energía
+        val_potencia = limpiar_valor_totalenergies(r'Importe\s+potencia.*?([\d\s.,]+)€', texto_completo)
+        val_energia = limpiar_valor_totalenergies(r'Importe\s+energía.*?([\d\s.,]+)€', texto_completo)
+        total_real = val_potencia + val_energia
 
-        # 5. Consumos (Buscamos "Consumo" o "Consumo calculado" para evitar las lecturas del contador)
+        # 5. Consumos ( kWh consumidos, no lecturas )
         def extraer_consumo_total_energies(tipo, texto):
-            # Buscamos el patrón donde aparezca el nombre del tramo y luego la palabra kWh
-            # Específicamente capturando el valor que va antes de 'kWh' en las líneas de resumen
+            # Captura el valor que va antes de 'kWh' en las líneas de resumen de consumo
             patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
             matches = re.findall(patron, texto, re.IGNORECASE)
             if matches:
-                # En TotalEnergies, la lectura suele ser un número grande y el consumo el más pequeño/último.
-                # Para evitar errores, tomamos el que corresponde a la sección de facturación.
-                return limpiar_float(matches[-1]) 
+                # Se toma el último match que suele ser el del desglose de facturación
+                v = matches[-1].replace(".", "").replace(",", ".")
+                return float(v)
             return 0.0
 
         consumos = {
