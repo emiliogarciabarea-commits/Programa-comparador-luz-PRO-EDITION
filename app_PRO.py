@@ -59,16 +59,19 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. Total Real (Debajo de "Total sin IVA")
-        # Buscamos el valor numérico que acompaña a "Total sin IVA" dentro del desglose
-        m_total_sin_iva = re.search(r'Total\s+sin\s+IVA\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        if m_total_sin_iva:
-            valor_sucio = m_total_sin_iva.group(1)
-            total_real = float(valor_sucio.replace(".", "").replace(",", "."))
+        # 4. TOTAL REAL (Ubicado junto a "Total sin IVA" y el símbolo €)
+        # Este patrón busca "Total sin IVA", salta posibles espacios/caracteres y captura el número antes del €
+        m_total = re.search(r'Total\s+sin\s+IVA\s*[:\-\s]*([\d\s\.,]+)\s*€', texto_completo, re.IGNORECASE)
+        if m_total:
+            # Limpiamos espacios y formateamos decimales (puntos de miles fuera, coma a punto)
+            valor_sucio = m_total.group(1).replace(" ", "")
+            if valor_sucio.count('.') > 0 and valor_sucio.count(',') > 0:
+                valor_limpio = valor_sucio.replace(".", "").replace(",", ".")
+            else:
+                valor_limpio = valor_sucio.replace(",", ".")
+            total_real = float(valor_limpio)
         else:
-            # Backup por si el texto está separado: buscar el primer importe tras "Total sin IVA"
-            m_alt = re.search(r'Total\s+sin\s+IVA.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
-            total_real = float(m_alt.group(1).replace(".", "").replace(",", ".")) if m_alt else 0.0
+            total_real = 0.0
 
         # 5. Consumos (kWh)
         def extraer_kwh(tipo, texto):
@@ -156,8 +159,8 @@ def extraer_datos_factura(pdf_path):
         m_valle = re.search(r'Valle\s*([\d,.]+)\s*kWh', texto_completo)
         consumos = {
             'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
-            'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
-            'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
+            'llano': float(m_llano.group(2).replace(',', '.')) if m_llano else 0.0,
+            'valle': float(m_valle.group(3).replace(',', '.')) if m_valle else 0.0
         }
         m_imp_potencia = re.search(r'Total\s+importe\s+potencia.*?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         m_imp_energia = re.search(r'Total\s+[\d,.]+\s*kWh\s+hasta.*?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
