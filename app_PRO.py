@@ -59,18 +59,20 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. TOTAL REAL (Truco: Buscar el valor bajo "Total sin IVA" en el bloque de Electricidad)
+        # 4. Total Real (Lógica específica para capturar el valor bajo "Total sin IVA" junto al €)
         total_real = 0.0
-        # Cortamos el texto para buscar solo después de que aparezca "Electricidad"
-        partes = re.split(r'Electricidad', texto_completo, flags=re.IGNORECASE)
-        texto_util = partes[1] if len(partes) > 1 else texto_completo
+        # Buscamos la etiqueta y capturamos el número que viene después (puede haber saltos de línea \s)
+        # El truco es buscar el patrón numérico que precede inmediatamente al símbolo € tras la etiqueta
+        patron_iva_euro = r'Total\s+sin\s+IVA[\s\n]+([\d,.]+)\s*€'
+        match_total = re.search(patron_iva_euro, texto_completo, re.IGNORECASE)
         
-        # Buscamos el patrón: Total sin IVA seguido de un número y el símbolo €
-        m_total = re.search(r'Total\s+sin\s+IVA\s*[\n\s]*([\d,.]+)\s*€', texto_util, re.IGNORECASE)
-        if m_total:
-            # Eliminamos puntos de miles y cambiamos coma por punto
-            val = m_total.group(1).replace('.', '').replace(',', '.')
-            total_real = float(val)
+        if match_total:
+            # Limpiamos el formato (quitar puntos de miles y cambiar coma por punto)
+            valor_limpio = match_total.group(1).replace('.', '').replace(',', '.')
+            try:
+                total_real = float(valor_limpio)
+            except:
+                total_real = 0.0
 
         # 5. Consumos (kWh)
         def extraer_kwh(tipo, texto):
@@ -123,7 +125,7 @@ def extraer_datos_factura(pdf_path):
         
         consumos = {
             'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
-            'llano': float(m_llano.group(2).replace(',', '.')) if (m_llano and len(m_llano.groups()) >= 1) else 0.0, # Corregido para Endesa
+            'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
             'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
         excedente = 0.0
@@ -167,7 +169,6 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0
 
     else:
-        # Lógica genérica
         patrones_consumo = {
             'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh'],
             'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh'],
