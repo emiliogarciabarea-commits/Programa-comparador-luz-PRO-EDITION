@@ -47,7 +47,7 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_total_energies:
-        # 1. Metadatos básicos
+        # 1. Metadatos
         m_fecha = re.search(r'Fecha\s+emisión:\s*([\d.]{10})', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
         m_dias_meta = re.search(r'(\d+)\s+día\(s\)', texto_completo, re.IGNORECASE)
@@ -55,22 +55,18 @@ def extraer_datos_factura(pdf_path):
         m_pot_meta = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot_meta.group(1).replace(',', '.')) if m_pot_meta else 0.0
 
-        # 2. EXTRACCIÓN QUIRÚRGICA POR FILAS DE PERIODO
+        # 2. EXTRACCIÓN QUIRÚRGICA: Sumar último valor de filas que empiezan por Fecha o Días
         total_real = 0.0
         lineas = texto_completo.split('\n')
-        
         for linea in lineas:
-            # Buscamos líneas que empiecen por una Fecha (DD.MM.AAAA) o por un número de Días (XX día(s))
-            es_fila_periodo = re.search(r'^(\d{2}\.\d{2}\.\d{4})|(\d+\s+día\(s\))', linea.strip())
-            if es_fila_periodo:
-                # Buscamos el último número antes del símbolo € al final de esa línea específica
-                m_valor = re.findall(r'([\d,.]+)\s*€\s*$', linea.strip())
+            linea_limpia = linea.strip()
+            # Fila de periodo: empieza por fecha DD.MM.AAAA o por número de días
+            if re.search(r'^(\d{2}\.\d{2}\.\d{4})|(\d+\s+día\(s\))', linea_limpia):
+                m_valor = re.findall(r'([\d,.]+)\s*€\s*$', linea_limpia)
                 if m_valor:
-                    # Limpiamos el valor (quitamos puntos de miles, cambiamos coma por punto)
-                    valor_final = m_valor[-1].replace('.', '').replace(',', '.')
-                    total_real += float(valor_final)
+                    total_real += float(m_valor[-1].replace('.', '').replace(',', '.'))
 
-        # 3. Consumos (kWh)
+        # 3. Consumos
         def extraer_kwh(tipo, texto):
             patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
             matches = re.findall(patron, texto, re.IGNORECASE)
@@ -85,7 +81,6 @@ def extraer_datos_factura(pdf_path):
         if sum(consumos.values()) == 0:
             m_gen = re.search(r'(\d+)\s*kWh\s+[\d,.]+\s*€/kWh', texto_completo)
             if m_gen: consumos['punta'] = float(m_gen.group(1))
-        
         excedente = 0.0
 
     elif es_endesa_luz:
@@ -267,10 +262,29 @@ else:
             ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
             ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
 
+            # --- BLOQUE DE SALIDA SOLICITADO ---
             st.divider()
             
+            df_precios_ganadora = pd.DataFrame()
             if not ranking_total.empty:
                 mejor_opcion_nombre = ranking_total.iloc[0]['Compañía/Tarifa']
+                fila_ganadora = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre]
+                
+                if not fila_ganadora.empty:
+                    df_precios_ganadora = pd.DataFrame({
+                        "Concepto": ["Compañía Ganadora", "P1 Potencia (€/kW/día)", "P2 Potencia (€/kW/día)", 
+                                    "Energía Punta (€/kWh)", "Energía Llano (€/kWh)", "Energía Valle (€/kWh)", "Excedente (€/kWh)"],
+                        "Valor": [
+                            mejor_opcion_nombre,
+                            fila_ganadora.iloc[0, 1],
+                            fila_ganadora.iloc[0, 2],
+                            fila_ganadora.iloc[0, 3],
+                            fila_ganadora.iloc[0, 4],
+                            fila_ganadora.iloc[0, 5],
+                            fila_ganadora.iloc[0, 6]
+                        ]
+                    })
+                
                 st.subheader("🏆 Resultado del Análisis")
                 c1, c2 = st.columns(2)
                 with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
@@ -283,9 +297,12 @@ else:
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
                 ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
+                df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
+                if not df_precios_ganadora.empty:
+                    df_precios_ganadora.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
 
             st.download_button(
-                label="📥 Descargar Informe Completo",
+                label="📥 Descargar Informe Completo (4 Hojas)",
                 data=buffer_excel.getvalue(),
                 file_name="estudio_ahorro_energetico.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
