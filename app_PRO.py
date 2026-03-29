@@ -56,30 +56,34 @@ def extraer_datos_factura(pdf_path):
         m_dias = re.search(r'(\d+)\s+día\(s\)', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
 
-        # 3. Potencia (kW)
+        # 3. Potencia
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # Función de limpieza para evitar errores de conversión
+        # Función de limpieza de float (tipo Endesa para evitar errores de miles)
         def limpiar_float(valor_str):
             if not valor_str: return 0.0
             limpio = valor_str.replace(" ", "").replace(".", "").replace(",", ".")
             try: return float(limpio)
             except: return 0.0
 
-        # 4. Total Real: Suma de los importes (€) de Potencia y Consumo
-        m_imp_potencia = re.search(r'Potencia\s+en\s+([\d\s.,]+)€', texto_completo, re.IGNORECASE)
-        m_imp_consumo = re.search(r'Consumo\s+en\s+([\d\s.,]+)€', texto_completo, re.IGNORECASE)
+        # 4. Total Real: Suma de Potencia y Consumo (Total sin IVA)
+        # Buscamos el bloque de Potencia y extraemos el valor final de la línea
+        m_imp_pot = re.search(r'Potencia\s+P1:.*?\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        imp_potencia = limpiar_float(m_imp_pot.group(1)) if m_imp_pot else 0.0
+
+        # Buscamos el bloque de Consumo y extraemos el valor final de la línea
+        m_imp_cons = re.search(r'Consumo\s+P1:.*?\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        imp_consumo = limpiar_float(m_imp_cons.group(1)) if m_imp_cons else 0.0
         
-        val_potencia_eur = limpiar_float(m_imp_potencia.group(1)) if m_imp_potencia else 0.0
-        val_consumo_eur = limpiar_float(m_imp_consumo.group(1)) if m_imp_consumo else 0.0
-        total_real = val_potencia_eur + val_consumo_eur
+        total_real = imp_potencia + imp_consumo
 
         # 5. Consumos (kWh)
         def extraer_consumo_total_energies(tipo, texto):
             patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
             matches = re.findall(patron, texto, re.IGNORECASE)
             if matches:
+                # Tomamos el último valor que suele ser el consumo calculado
                 return limpiar_float(matches[-1]) 
             return 0.0
 
