@@ -18,6 +18,7 @@ def extraer_datos_factura(pdf_path):
     es_repsol = re.search(r'repsol', texto_completo, re.IGNORECASE)
     es_endesa_luz = re.search(r'Endesa\s+Energía', texto_completo, re.IGNORECASE)
     es_total_energies = re.search(r'TotalEnergies', texto_completo, re.IGNORECASE)
+    es_xxi = re.search(r'Energía\s+XXI', texto_completo, re.IGNORECASE)
 
     if es_el_corte_ingles:
         patron_cons_eci = r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)'
@@ -47,7 +48,6 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_total_energies:
-        # 1. Metadatos
         m_fecha = re.search(r'Fecha\s+emisión:\s*([\d.]{10})', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
         m_dias_meta = re.search(r'(\d+)\s+día\(s\)', texto_completo, re.IGNORECASE)
@@ -55,18 +55,15 @@ def extraer_datos_factura(pdf_path):
         m_pot_meta = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot_meta.group(1).replace(',', '.')) if m_pot_meta else 0.0
 
-        # 2. EXTRACCIÓN QUIRÚRGICA: Sumar último valor de filas que empiezan por Fecha o Días
         total_real = 0.0
         lineas = texto_completo.split('\n')
         for linea in lineas:
             linea_limpia = linea.strip()
-            # Fila de periodo: empieza por fecha DD.MM.AAAA o por número de días
             if re.search(r'^(\d{2}\.\d{2}\.\d{4})|(\d+\s+día\(s\))', linea_limpia):
                 m_valor = re.findall(r'([\d,.]+)\s*€\s*$', linea_limpia)
                 if m_valor:
                     total_real += float(m_valor[-1].replace('.', '').replace(',', '.'))
 
-        # 3. Consumos
         def extraer_kwh(tipo, texto):
             patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
             matches = re.findall(patron, texto, re.IGNORECASE)
@@ -161,6 +158,7 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0
 
     else:
+        # Lógica genérica y Energía XXI
         patrones_consumo = {
             'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh'],
             'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh'],
@@ -184,8 +182,14 @@ def extraer_datos_factura(pdf_path):
         dias = int(match_dias.group(1)) if match_dias else 0
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
-        match_total = re.search(r'(?:Subtotal|Importe\s+total|Total\s+factura)\s*:?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
+        
+        if es_xxi:
+            m_pot = re.search(r'por\s+potencia\s+contratada\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            m_ene = re.search(r'por\s+energía\s+consumida\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            total_real = (float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0) + (float(m_ene.group(1).replace(',', '.')) if m_ene else 0.0)
+        else:
+            match_total = re.search(r'(?:Subtotal|Importe\s+total|Total\s+factura)\s*:?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
     return {
         "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
@@ -262,7 +266,6 @@ else:
             ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
             ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
 
-            # --- BLOQUE DE SALIDA SOLICITADO ---
             st.divider()
             
             df_precios_ganadora = pd.DataFrame()
