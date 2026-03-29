@@ -17,7 +17,7 @@ def extraer_datos_factura(pdf_path):
     es_naturgy = re.search(r'Naturgy', texto_completo, re.IGNORECASE)
     es_repsol = re.search(r'repsol', texto_completo, re.IGNORECASE)
     es_endesa_luz = re.search(r'Endesa\s+Energía', texto_completo, re.IGNORECASE)
-    # Identificación de TotalEnergies [cite: 194]
+    # Identificación de TotalEnergies
     es_total_energies = re.search(r'TotalEnergies', texto_completo, re.IGNORECASE)
 
     if es_el_corte_ingles:
@@ -48,45 +48,45 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_total_energies:
-        # 1. Fecha: Formato DD.MM.AAAA [cite: 196, 223]
+        # 1. Fecha: Formato DD.MM.AAAA
         m_fecha = re.search(r'Fecha\s+emisión:\s*([\d.]{10})', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
 
-        # 2. Días: Extraído de la sección de potencia [cite: 272]
+        # 2. Días
         m_dias = re.search(r'(\d+)\s+día\(s\)', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
 
-        # 3. Potencia: P1 contratada [cite: 272]
+        # 3. Potencia
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. Total Real: Usando lógica de limpieza para evitar errores con miles [cite: 265, 278]
-        def limpiar_valor_total(patron, texto):
-            match = re.search(patron, texto, re.IGNORECASE)
-            if match:
-                valor_sucio = match.group(1)
-                # Elimina puntos de miles, espacios y cambia coma por punto decimal [cite: 156]
-                valor_limpio = valor_sucio.replace(" ", "").replace(".", "").replace(",", ".")
-                try: return float(valor_limpio)
-                except: return 0.0
-            return 0.0
+        # 4. Total Real (con limpieza de puntos de miles)
+        def limpiar_float(valor_str):
+            if not valor_str: return 0.0
+            # Quita espacios, quita puntos (miles) y cambia coma por punto (decimal)
+            limpio = valor_str.replace(" ", "").replace(".", "").replace(",", ".")
+            try: return float(limpio)
+            except: return 0.0
 
-        total_real = limpiar_valor_total(r'IMPORTE\s+TOTAL\s+ELECTRICIDAD\s+\+\s+TASAS\s+E\s+IMPUESTOS\s+([\d\s.,]+)€', texto_completo)
+        m_total = re.search(r'TOTAL\s+ELECTRICIDAD.*?([\d\s.,]+)€', texto_completo, re.IGNORECASE | re.DOTALL)
+        total_real = limpiar_float(m_total.group(1)) if m_total else 0.0
 
-        # 5. Consumos: Punta, Llano y Valle [cite: 282]
-        def extraer_consumo_total(tipo, texto):
-            # Busca específicamente en la cadena de consumos detallados
-            m = re.search(rf'{tipo}:\s*([\d,.]+)\s*kWh', texto, re.IGNORECASE)
-            if m:
-                # Se aplica el mismo criterio de limpieza que en Endesa
-                v = m.group(1).replace(".", "").replace(",", ".")
-                return float(v)
+        # 5. Consumos (Buscamos "Consumo" o "Consumo calculado" para evitar las lecturas del contador)
+        def extraer_consumo_total_energies(tipo, texto):
+            # Buscamos el patrón donde aparezca el nombre del tramo y luego la palabra kWh
+            # Específicamente capturando el valor que va antes de 'kWh' en las líneas de resumen
+            patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
+            matches = re.findall(patron, texto, re.IGNORECASE)
+            if matches:
+                # En TotalEnergies, la lectura suele ser un número grande y el consumo el más pequeño/último.
+                # Para evitar errores, tomamos el que corresponde a la sección de facturación.
+                return limpiar_float(matches[-1]) 
             return 0.0
 
         consumos = {
-            'punta': extraer_consumo_total('punta', texto_completo),
-            'llano': extraer_consumo_total('llano', texto_completo),
-            'valle': extraer_consumo_total('valle', texto_completo)
+            'punta': extraer_consumo_total_energies('Punta', texto_completo),
+            'llano': extraer_consumo_total_energies('Llano', texto_completo),
+            'valle': extraer_consumo_total_energies('Valle', texto_completo)
         }
         excedente = 0.0
 
