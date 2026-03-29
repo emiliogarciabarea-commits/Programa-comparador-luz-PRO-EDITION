@@ -47,41 +47,34 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_total_energies:
-        # 1. Fecha y Días
+        # 1. Metadatos básicos
         m_fecha = re.search(r'Fecha\s+emisión:\s*([\d.]{10})', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
-        m_dias = re.search(r'(\d+)\s+día\(s\)', texto_completo, re.IGNORECASE)
-        dias = int(m_dias.group(1)) if m_dias else 0
+        m_dias_meta = re.search(r'(\d+)\s+día\(s\)', texto_completo, re.IGNORECASE)
+        dias = int(m_dias_meta.group(1)) if m_dias_meta else 0
+        m_pot_meta = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
+        potencia = float(m_pot_meta.group(1).replace(',', '.')) if m_pot_meta else 0.0
 
-        # 2. Potencia (kW)
-        m_pot_kW = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
-        potencia = float(m_pot_kW.group(1).replace(',', '.')) if m_pot_kW else 0.0
-
-        # 3. EXTRACCIÓN QUIRÚRGICA DEL TOTAL REAL (Suma de los valores a la derecha de las filas "Período")
+        # 2. EXTRACCIÓN QUIRÚRGICA POR FILAS DE PERIODO
         total_real = 0.0
         lineas = texto_completo.split('\n')
         
-        # Buscamos líneas que empiecen por una fecha (DD.MM.AAAA o DD/MM/AAAA) o por un número de días
-        patron_fila_periodo = r'^(\d{2}[\./]\d{2}[\./]\d{4}|\d+\s+día\(s\))'
-        
         for linea in lineas:
-            linea = linea.strip()
-            if re.match(patron_fila_periodo, linea):
-                # Extraemos el último número de la línea antes del símbolo € (o simplemente el último número)
-                valores_fila = re.findall(r'([\d,.]+)\s*€?$', linea)
-                if valores_fila:
-                    valor_str = valores_fila[-1].replace('.', '').replace(',', '.')
-                    try:
-                        total_real += float(valor_str)
-                    except:
-                        continue
-        
-        # 4. Consumos (kWh)
+            # Buscamos líneas que empiecen por una Fecha (DD.MM.AAAA) o por un número de Días (XX día(s))
+            es_fila_periodo = re.search(r'^(\d{2}\.\d{2}\.\d{4})|(\d+\s+día\(s\))', linea.strip())
+            if es_fila_periodo:
+                # Buscamos el último número antes del símbolo € al final de esa línea específica
+                m_valor = re.findall(r'([\d,.]+)\s*€\s*$', linea.strip())
+                if m_valor:
+                    # Limpiamos el valor (quitamos puntos de miles, cambiamos coma por punto)
+                    valor_final = m_valor[-1].replace('.', '').replace(',', '.')
+                    total_real += float(valor_final)
+
+        # 3. Consumos (kWh)
         def extraer_kwh(tipo, texto):
             patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
             matches = re.findall(patron, texto, re.IGNORECASE)
-            if matches:
-                return float(matches[-1].replace('.', '').replace(',', '.'))
+            if matches: return float(matches[-1].replace('.', '').replace(',', '.'))
             return 0.0
 
         consumos = {
@@ -89,7 +82,6 @@ def extraer_datos_factura(pdf_path):
             'llano': extraer_kwh('Llano', texto_completo),
             'valle': extraer_kwh('Valle', texto_completo)
         }
-        
         if sum(consumos.values()) == 0:
             m_gen = re.search(r'(\d+)\s*kWh\s+[\d,.]+\s*€/kWh', texto_completo)
             if m_gen: consumos['punta'] = float(m_gen.group(1))
