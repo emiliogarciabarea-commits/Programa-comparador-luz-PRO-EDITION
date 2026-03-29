@@ -304,4 +304,9 @@ else:
                 df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
 
             st.download_button(
-                label="📥 DESCARGAR IN
+                label="📥 DESCARGAR INFORME COMPLETO (4 HOJAS)",
+                data=buffer_excel.getvalue(),
+                file_name="estudio_energetico_pro.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
