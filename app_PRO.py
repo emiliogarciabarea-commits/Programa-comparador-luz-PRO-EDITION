@@ -59,41 +59,30 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # NUEVA LÓGICA: Buscar por bloques de texto (Importes en €)
-        lineas = texto_completo.split('\n')
-        val_potencia_euros = 0.0
-        val_consumo_euros = 0.0
+        # Función para capturar el valor a la derecha de la palabra "Total" en cada bloque
+        def limpiar_monto(valor_str):
+            if not valor_str: return 0.0
+            # Limpieza total: quita puntos de miles y cambia coma por punto
+            limpio = valor_str.replace(".", "").replace(",", ".").strip()
+            try: return float(limpio)
+            except: return 0.0
 
-        for i, linea in enumerate(lineas):
-            # Buscar el bloque de Potencia
-            if "Potencia" in linea and val_potencia_euros == 0:
-                # Miramos esta línea y las 2 siguientes buscando el primer "XX,XX €"
-                for j in range(i, min(i+3, len(lineas))):
-                    m_eur = re.search(r'([\d\s.,]+)\s*€', lineas[j])
-                    if m_eur:
-                        val = m_eur.group(1).strip().replace(".", "").replace(",", ".")
-                        val_potencia_euros = float(val)
-                        break
-            
-            # Buscar el bloque de Consumo (evitando que sea la línea de lectura kWh)
-            if "Consumo" in linea and val_consumo_euros == 0 and "kWh" not in linea:
-                for j in range(i, min(i+3, len(lineas))):
-                    m_eur = re.search(r'([\d\s.,]+)\s*€', lineas[j])
-                    if m_eur:
-                        val = m_eur.group(1).strip().replace(".", "").replace(",", ".")
-                        val_consumo_euros = float(val)
-                        break
+        # 4. Total Real: Buscamos específicamente los totales de la derecha de la tabla
+        # Buscamos "Total potencia" y "Total consumo" para capturar el importe final de cada bloque
+        m_pot_euros = re.search(r'Total\s+potencia\s+([\d,.]+)', texto_completo, re.IGNORECASE)
+        m_cons_euros = re.search(r'Total\s+consumo\s+([\d,.]+)', texto_completo, re.IGNORECASE)
+        
+        val_potencia = limpiar_monto(m_pot_euros.group(1)) if m_pot_euros else 0.0
+        val_consumo = limpiar_monto(m_cons_euros.group(1)) if m_cons_euros else 0.0
+        total_real = val_potencia + val_consumo
 
-        total_real = val_potencia_euros + val_consumo_euros
-
-        # 5. Consumos (kWh)
+        # 5. Consumos (kWh) - Evitando lecturas
         def extraer_kwh(tipo, texto):
-            patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
-            matches = re.findall(patron, texto, re.IGNORECASE)
-            if matches:
-                v = matches[-1].replace(".", "").replace(",", ".")
-                try: return float(v)
-                except: return 0.0
+            # En TotalEnergies, el consumo real suele venir indicado como "Consumo [Tramo]"
+            patron = rf'Consumo\s+{tipo}.*?([\d,.]+)\s*kWh'
+            match = re.search(patron, texto, re.IGNORECASE)
+            if match:
+                return limpiar_monto(match.group(1))
             return 0.0
 
         consumos = {
