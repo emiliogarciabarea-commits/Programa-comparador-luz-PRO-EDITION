@@ -59,21 +59,15 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. Total Real: Buscamos el valor justo después de "Total sin IVA"
-        # Usamos el truco de buscar el primer número con coma/punto seguido de € tras esa etiqueta
-        patron_total_sin_iva = r'Total\s+sin\s+IVA\s*([\d\s.,]+)\s*€'
-        match_total = re.search(patron_total_sin_iva, texto_completo, re.IGNORECASE)
-        
-        if match_total:
-            valor_sucio = match_total.group(1).strip()
-            # Limpieza: quitamos espacios, puntos de miles y cambiamos coma por punto
-            valor_limpio = valor_sucio.replace(" ", "").replace(".", "").replace(",", ".")
-            try:
-                total_real = float(valor_limpio)
-            except:
-                total_real = 0.0
-        else:
-            total_real = 0.0
+        # 4. TRUCO TOTAL REAL: Buscamos el bloque de Electricidad y su "Total sin IVA"
+        # Cortamos el texto para enfocarnos solo en la parte de la tabla de luz
+        bloque_elec = re.split(r'Electricidad', texto_completo, flags=re.IGNORECASE)
+        total_real = 0.0
+        if len(bloque_elec) > 1:
+            # Buscamos el primer "Total sin IVA" que aparece después de la palabra Electricidad
+            m_total = re.search(r'Total\s+sin\s+IVA\s*([\d,.]+)\s*€', bloque_elec[1], re.IGNORECASE)
+            if m_total:
+                total_real = float(m_total.group(1).replace('.', '').replace(',', '.'))
 
         # 5. Consumos (kWh)
         def extraer_kwh(tipo, texto):
