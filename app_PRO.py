@@ -59,37 +59,28 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # Lógica de limpieza robusta (Igual que Endesa para evitar error 3.097.69)
-        def limpiar_moneda(texto_linea):
-            # Busca algo como "12,34 €" o "1.234,56 €"
-            match = re.search(r'([\d\s.,]+)\s*€', texto_linea)
-            if match:
-                val = match.group(1).strip().replace(" ", "").replace(".", "").replace(",", ".")
-                try: return float(val)
+        # Función de limpieza estilo Endesa para evitar errores con miles (3.097,69 -> 3097.69)
+        def limpiar_euros(patron, texto):
+            matches = re.findall(patron, texto, re.IGNORECASE | re.DOTALL)
+            if matches:
+                # Nos quedamos con el último valor numérico antes del símbolo € en ese bloque
+                valor_sucio = matches[-1]
+                valor_limpio = valor_sucio.replace(" ", "").replace(".", "").replace(",", ".")
+                try: return float(valor_limpio)
                 except: return 0.0
             return 0.0
 
-        # 4. Total Real: Sumamos importes buscando las líneas clave
-        val_potencia_euros = 0.0
-        val_consumo_euros = 0.0
-        
-        for linea in texto_completo.split('\n'):
-            if "Potencia" in linea and "€" in linea:
-                # Solo sumamos si no ha sido asignado para evitar duplicados de sub-tramos
-                if val_potencia_euros == 0: val_potencia_euros = limpiar_moneda(linea)
-            if "Consumo" in linea and "€" in linea and "kWh" not in linea:
-                # Captura la línea de "Consumo ... XX,XX €"
-                if val_consumo_euros == 0: val_consumo_euros = limpiar_moneda(linea)
-
+        # 4. Total Real: Suma de Potencia y Consumo (valores seguidos de € en el desglose)
+        # Buscamos el valor que precede a € después de las palabras clave
+        val_potencia_euros = limpiar_euros(r'Potencia\s+.*?([\d,.]+)\s*€', texto_completo)
+        val_consumo_euros = limpiar_euros(r'Consumo\s+.*?([\d,.]+)\s*€', texto_completo)
         total_real = val_potencia_euros + val_consumo_euros
 
         # 5. Consumos (kWh)
         def extraer_kwh(tipo, texto):
-            # Buscamos el valor numérico que va justo antes de "kWh" en la línea del tramo
             patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
             matches = re.findall(patron, texto, re.IGNORECASE)
             if matches:
-                # El consumo suele ser el último valor de la línea en TotalEnergies
                 v = matches[-1].replace(".", "").replace(",", ".")
                 try: return float(v)
                 except: return 0.0
