@@ -59,24 +59,16 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. TOTAL REAL (Suma de los dos "Total sin IVA" de las tablas de desglose)
-        # Buscamos los bloques de Potencia y Energía para no confundir con otros conceptos
-        bloque_potencia = re.search(r'Importe\s+por\s+potencia(.*?Total\s+sin\s+IVA\s*[\d,.]+)', texto_completo, re.IGNORECASE | re.DOTALL)
-        bloque_energia = re.search(r'Importe\s+por\s+energía(.*?Total\s+sin\s+IVA\s*[\d,.]+)', texto_completo, re.IGNORECASE | re.DOTALL)
+        # 4. TOTAL REAL (Suma los valores justo después de cada "Total sin IVA")
+        # El patrón busca "Total sin IVA" seguido de un importe en €
+        importes_sin_iva = re.findall(r'Total\s+sin\s+IVA\s*[\n\s]*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
-        val_pot = 0.0
-        val_ene = 0.0
+        total_real = 0.0
+        # Cogemos los dos primeros valores de la lista (normalmente Potencia y Consumo)
+        # En tu texto: 2,44 y 13,49
+        for imp in importes_sin_iva[:2]:
+            total_real += float(imp.replace('.', '').replace(',', '.'))
         
-        if bloque_potencia:
-            m_val = re.search(r'Total\s+sin\s+IVA\s*([\d,.]+)', bloque_potencia.group(1), re.IGNORECASE)
-            if m_val: val_pot = float(m_val.group(1).replace('.', '').replace(',', '.'))
-            
-        if bloque_energia:
-            m_val = re.search(r'Total\s+sin\s+IVA\s*([\d,.]+)', bloque_energia.group(1), re.IGNORECASE)
-            if m_val: val_ene = float(m_val.group(1).replace('.', '').replace(',', '.'))
-            
-        total_real = val_pot + val_ene
-
         # 5. Consumos (kWh)
         def extraer_kwh(tipo, texto):
             patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
@@ -92,6 +84,11 @@ def extraer_datos_factura(pdf_path):
             'llano': extraer_kwh('Llano', texto_completo),
             'valle': extraer_kwh('Valle', texto_completo)
         }
+        # Si la tabla es compacta como la que pegaste (un solo valor general de 18 kWh):
+        if sum(consumos.values()) == 0:
+            m_gen = re.search(r'(\d+)\s*kWh\s+[\d,.]+\s*€/kWh', texto_completo)
+            if m_gen: consumos['punta'] = float(m_gen.group(1))
+
         excedente = 0.0
 
     elif es_endesa_luz:
