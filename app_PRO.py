@@ -59,21 +59,31 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # Función de limpieza estilo Endesa para evitar errores con miles (3.097,69 -> 3097.69)
-        def limpiar_euros(patron, texto):
-            matches = re.findall(patron, texto, re.IGNORECASE | re.DOTALL)
-            if matches:
-                # Nos quedamos con el último valor numérico antes del símbolo € en ese bloque
-                valor_sucio = matches[-1]
-                valor_limpio = valor_sucio.replace(" ", "").replace(".", "").replace(",", ".")
-                try: return float(valor_limpio)
-                except: return 0.0
-            return 0.0
+        # NUEVA LÓGICA: Buscar por bloques de texto (Importes en €)
+        lineas = texto_completo.split('\n')
+        val_potencia_euros = 0.0
+        val_consumo_euros = 0.0
 
-        # 4. Total Real: Suma de Potencia y Consumo (valores seguidos de € en el desglose)
-        # Buscamos el valor que precede a € después de las palabras clave
-        val_potencia_euros = limpiar_euros(r'Potencia\s+.*?([\d,.]+)\s*€', texto_completo)
-        val_consumo_euros = limpiar_euros(r'Consumo\s+.*?([\d,.]+)\s*€', texto_completo)
+        for i, linea in enumerate(lineas):
+            # Buscar el bloque de Potencia
+            if "Potencia" in linea and val_potencia_euros == 0:
+                # Miramos esta línea y las 2 siguientes buscando el primer "XX,XX €"
+                for j in range(i, min(i+3, len(lineas))):
+                    m_eur = re.search(r'([\d\s.,]+)\s*€', lineas[j])
+                    if m_eur:
+                        val = m_eur.group(1).strip().replace(".", "").replace(",", ".")
+                        val_potencia_euros = float(val)
+                        break
+            
+            # Buscar el bloque de Consumo (evitando que sea la línea de lectura kWh)
+            if "Consumo" in linea and val_consumo_euros == 0 and "kWh" not in linea:
+                for j in range(i, min(i+3, len(lineas))):
+                    m_eur = re.search(r'([\d\s.,]+)\s*€', lineas[j])
+                    if m_eur:
+                        val = m_eur.group(1).strip().replace(".", "").replace(",", ".")
+                        val_consumo_euros = float(val)
+                        break
+
         total_real = val_potencia_euros + val_consumo_euros
 
         # 5. Consumos (kWh)
