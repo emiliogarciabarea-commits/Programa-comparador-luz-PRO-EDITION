@@ -47,7 +47,7 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_total_energies:
-        # 1. Fecha: Formato DD.MM.AAAA
+        # 1. Fecha
         m_fecha = re.search(r'Fecha\s+emisión:\s*([\d.]{10})', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
 
@@ -59,15 +59,16 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. TRUCO TOTAL REAL: Buscamos el bloque de Electricidad y su "Total sin IVA"
-        # Cortamos el texto para enfocarnos solo en la parte de la tabla de luz
-        bloque_elec = re.split(r'Electricidad', texto_completo, flags=re.IGNORECASE)
-        total_real = 0.0
-        if len(bloque_elec) > 1:
-            # Buscamos el primer "Total sin IVA" que aparece después de la palabra Electricidad
-            m_total = re.search(r'Total\s+sin\s+IVA\s*([\d,.]+)\s*€', bloque_elec[1], re.IGNORECASE)
-            if m_total:
-                total_real = float(m_total.group(1).replace('.', '').replace(',', '.'))
+        # 4. TOTAL REAL (Uso de truco de bloque específico para TotalEnergies)
+        # Buscamos el valor numérico que está junto a "Total sin IVA" y el símbolo €
+        # El flag re.DOTALL permite que el '.' encuentre saltos de línea si el valor está debajo
+        m_total = re.search(r'Total\s+sin\s+IVA\s*[\s\n]*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        if m_total:
+            # Limpiamos puntos de miles y convertimos coma en punto decimal
+            valor_sucio = m_total.group(1).replace(".", "")
+            total_real = float(valor_sucio.replace(",", "."))
+        else:
+            total_real = 0.0
 
         # 5. Consumos (kWh)
         def extraer_kwh(tipo, texto):
