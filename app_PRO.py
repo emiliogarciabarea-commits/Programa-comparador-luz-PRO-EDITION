@@ -59,23 +59,23 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. VALOR REAL (Solo Potencia + Consumo de la tabla)
-        # Buscamos los importes que están al final de las líneas de detalle (antes de €)
-        def extraer_importe_linea(patron_linea, texto):
-            # Busca el patrón y captura el número decimal al final de esa misma línea
-            match = re.search(patron_linea + r'.*?([\d,.]+)\s*€', texto, re.IGNORECASE)
-            if match:
-                val = match.group(1).replace(".", "").replace(",", ".")
-                try: return float(val)
-                except: return 0.0
-            return 0.0
+        # Función para limpiar importes (ej: "2,44 €" -> 2.44)
+        def limpiar_valor(valor_str):
+            if not valor_str: return 0.0
+            limpio = valor_str.replace(".", "").replace(",", ".").strip()
+            try: return float(limpio)
+            except: return 0.0
 
-        # Importe de Potencia (la línea que contiene kW día)
-        imp_pot = extraer_importe_linea(r'kW\s+día', texto_completo)
-        # Importe de Consumo (la línea que contiene kWh y el precio unitario)
-        imp_cons = extraer_importe_linea(r'kWh.*?€/kWh', texto_completo)
+        # 4. Total Real (Suma de bloques de Consumo y Potencia, ignorando Otros Conceptos)
+        # Buscamos el valor al final de la línea que contiene el periodo y los kWh
+        m_val_consumo = re.search(r'\d{2}\.\d{2}\.\d{4}.*?kWh.*?([\d,.]+)\s*€', texto_completo)
+        # Buscamos el valor al final de la línea que empieza por los días facturados
+        m_val_potencia = re.search(r'\d+\s+día\(s\).*?kW.*?([\d,.]+)\s*€', texto_completo)
+
+        val_consumo = limpiar_valor(m_val_consumo.group(1)) if m_val_consumo else 0.0
+        val_potencia = limpiar_valor(m_val_potencia.group(1)) if m_val_potencia else 0.0
         
-        total_real = imp_pot + imp_cons
+        total_real = val_consumo + val_potencia
 
         # 5. Consumos (kWh)
         def extraer_kwh(tipo, texto):
@@ -87,9 +87,19 @@ def extraer_datos_factura(pdf_path):
                 except: return 0.0
             return 0.0
 
-        # Si es tarifa simple (como en tu ejemplo), el consumo total va a 'punta'
-        cons_p = extraer_kwh('kWh', texto_completo) # Buscamos el genérico si no hay tramos
-        consumos = {'punta': cons_p, 'llano': 0.0, 'valle': 0.0}
+        # Si solo hay un tramo (como en el ejemplo), se asigna a punta
+        consumo_total_kwh = extraer_kwh('kWh', texto_completo) 
+        
+        # Intentar desglosar si existen palabras clave, si no, asignar al total encontrado
+        p_punta = extraer_kwh('Punta', texto_completo)
+        p_llano = extraer_kwh('Llano', texto_completo)
+        p_valle = extraer_kwh('Valle', texto_completo)
+
+        if p_punta == 0 and p_llano == 0 and p_valle == 0:
+            consumos = {'punta': consumo_total_kwh, 'llano': 0.0, 'valle': 0.0}
+        else:
+            consumos = {'punta': p_punta, 'llano': p_llano, 'valle': p_valle}
+            
         excedente = 0.0
 
     elif es_endesa_luz:
