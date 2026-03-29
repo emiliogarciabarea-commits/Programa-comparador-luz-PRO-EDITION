@@ -16,9 +16,9 @@ def extraer_datos_factura(pdf_path):
     es_iberdrola = re.search(r'IBERDROLA\s+CLIENTES', texto_completo, re.IGNORECASE)
     es_naturgy = re.search(r'Naturgy', texto_completo, re.IGNORECASE)
     es_repsol = re.search(r'repsol', texto_completo, re.IGNORECASE)
-    es_total_energies = re.search(r'TotalEnergies', texto_completo, re.IGNORECASE)
-    # Endesa Energía (Mercado Libre) no es lo mismo que Energía XXI (Referencia)
     es_endesa_luz = re.search(r'Endesa\s+Energía', texto_completo, re.IGNORECASE)
+    # Nueva detección para TotalEnergies
+    es_total_energies = re.search(r'TotalEnergies', texto_completo, re.IGNORECASE)
 
     if es_el_corte_ingles:
         patron_cons_eci = r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)'
@@ -48,25 +48,23 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_total_energies:
-        # 1. Fecha: Formato DD.MM.AAAA (primera aparición)
+        # 1. Fecha: Formato DD.MM.AAAA (la primera que aparece)
         m_fecha = re.search(r'(\d{2}\.\d{2}\.\d{4})', texto_completo)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
 
-        # 2. Días: Número seguido de "día(s)"
-        m_dias = re.search(r'(\d+)\s+dia\(s\)', texto_completo, re.IGNORECASE)
+        # 2. Días: Número antes de "día(s)"
+        m_dias = re.search(r'(\d+)\s+día\(s\)', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
 
         # 3. Potencia: Número seguido de kW
-        m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
-        if not m_pot: # Intento genérico si el anterior falla
-            m_pot = re.search(r'([\d,.]+)\s*kW', texto_completo)
+        m_pot = re.search(r'([\d,.]+)\s*kW', texto_completo)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. Consumos Detallados (Punta, Llano, Valle en kWh)
+        # 4. Consumos Detallados: Punta, Llano y Valle en el texto final
         m_punta = re.search(r'punta:\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         m_llano = re.search(r'llano:\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         m_valle = re.search(r'valle:\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-
+        
         consumos = {
             'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
             'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
@@ -74,14 +72,11 @@ def extraer_datos_factura(pdf_path):
         }
 
         # 5. Total Factura
-        m_total = re.search(r'IMPORTE\s+TOTAL\s+ELECTRICIDAD.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
-        if not m_total:
-             m_total = re.search(r'valor\s+de\s+([\d,.]+)\s+euros', texto_completo, re.IGNORECASE)
+        m_total = re.search(r'IMPORTE\s+TOTAL\s+ELECTRICIDAD\s+\+\s+TASAS\s+E\s+IMPUESTOS\s+([\d,.]+)', texto_completo, re.IGNORECASE)
         total_real = float(m_total.group(1).replace(',', '.')) if m_total else 0.0
         excedente = 0.0
 
     elif es_endesa_luz:
-        # 1. Fecha: Búsqueda robusta (Primero por etiqueta, luego por primer formato DD/MM/AAAA)
         m_fecha_etiqueta = re.search(r'Fecha\s+emisión\s+factura:\s*([\d/]{10})', texto_completo, re.IGNORECASE)
         if m_fecha_etiqueta:
             fecha = m_fecha_etiqueta.group(1)
@@ -89,15 +84,12 @@ def extraer_datos_factura(pdf_path):
             m_fecha_generica = re.search(r'(\d{2}/\d{2}/\d{4})', texto_completo)
             fecha = m_fecha_generica.group(1) if m_fecha_generica else "No encontrada"
 
-        # 2. Días: Número justo antes de "días"
         m_dias = re.search(r'(\d+)\s+días', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
 
-        # 3. Potencia: Justo al lado de kW en punta-llano
         m_pot = re.search(r'punta-llano\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. Valor Real: Suma de Potencia y Energía (limpiando puntos y espacios rebeldes)
         def limpiar_valor_endesa(patron, texto):
             match = re.search(patron, texto, re.IGNORECASE)
             if match:
@@ -112,7 +104,6 @@ def extraer_datos_factura(pdf_path):
         val_energia = limpiar_valor_endesa(r'Energía\s+\.+\s*([\d\s.,]+)€', texto_completo)
         total_real = val_potencia + val_energia
 
-        # 5. Consumos (Punta, Llano, Valle)
         m_punta = re.search(r'Punta\s+[\d,.]+\s+[\d,.]+\s+[\d,.]+\s+[\w,.]+\s+([\d,.]+)', texto_completo, re.IGNORECASE)
         m_llano = re.search(r'Llano\s+[\d,.]+\s+[\d,.]+\s+[\d,.]+\s+[\w,.]+\s+([\d,.]+)', texto_completo, re.IGNORECASE)
         m_valle = re.search(r'Valle\s+[\d,.]+\s+[\d,.]+\s+[\d,.]+\s+[\w,.]+\s+([\d,.]+)', texto_completo, re.IGNORECASE)
