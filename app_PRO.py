@@ -60,28 +60,26 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # Función de limpieza robusta (estilo Endesa)
+        # Función de limpieza para evitar errores de conversión
         def limpiar_float(valor_str):
             if not valor_str: return 0.0
             limpio = valor_str.replace(" ", "").replace(".", "").replace(",", ".")
             try: return float(limpio)
             except: return 0.0
 
-        # 4. Total Real: Suma de Importe Potencia (€) + Importe Consumo (€)
-        # Buscamos los importes que aparecen en el resumen de la derecha de la factura
-        m_imp_pot = re.search(r'Importe\s+por\s+potencia\s+.*?\s+([\d\s.,]+)€', texto_completo, re.IGNORECASE)
-        m_imp_cons = re.search(r'Importe\s+por\s+consumo\s+.*?\s+([\d\s.,]+)€', texto_completo, re.IGNORECASE)
+        # 4. Total Real: Suma de los importes (€) de Potencia y Consumo
+        m_imp_potencia = re.search(r'Potencia\s+en\s+([\d\s.,]+)€', texto_completo, re.IGNORECASE)
+        m_imp_consumo = re.search(r'Consumo\s+en\s+([\d\s.,]+)€', texto_completo, re.IGNORECASE)
         
-        val_pot_eur = limpiar_float(m_imp_pot.group(1)) if m_imp_pot else 0.0
-        val_cons_eur = limpiar_float(m_imp_cons.group(1)) if m_imp_cons else 0.0
-        total_real = val_pot_eur + val_cons_eur
+        val_potencia_eur = limpiar_float(m_imp_potencia.group(1)) if m_imp_potencia else 0.0
+        val_consumo_eur = limpiar_float(m_imp_consumo.group(1)) if m_imp_consumo else 0.0
+        total_real = val_potencia_eur + val_consumo_eur
 
         # 5. Consumos (kWh)
         def extraer_consumo_total_energies(tipo, texto):
             patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
             matches = re.findall(patron, texto, re.IGNORECASE)
             if matches:
-                # El consumo es el último valor del match (evita las lecturas de contador)
                 return limpiar_float(matches[-1]) 
             return 0.0
 
