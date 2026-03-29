@@ -59,20 +59,14 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
 
-        # 4. Total Real (Lógica específica para capturar el valor bajo "Total sin IVA" junto al €)
+        # 4. TOTAL REAL (Refinado para capturar el valor exacto de la tabla de luz)
         total_real = 0.0
-        # Buscamos la etiqueta y capturamos el número que viene después (puede haber saltos de línea \s)
-        # El truco es buscar el patrón numérico que precede inmediatamente al símbolo € tras la etiqueta
-        patron_iva_euro = r'Total\s+sin\s+IVA[\s\n]+([\d,.]+)\s*€'
-        match_total = re.search(patron_iva_euro, texto_completo, re.IGNORECASE)
-        
-        if match_total:
-            # Limpiamos el formato (quitar puntos de miles y cambiar coma por punto)
-            valor_limpio = match_total.group(1).replace('.', '').replace(',', '.')
-            try:
-                total_real = float(valor_limpio)
-            except:
-                total_real = 0.0
+        # Buscamos "Total sin IVA" y capturamos el primer importe con € que aparezca después
+        m_total = re.search(r'Total\s+sin\s+IVA\s*[\n\s]*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        if m_total:
+            # Limpiamos puntos de miles y convertimos coma en punto decimal
+            val_texto = m_total.group(1).replace('.', '').replace(',', '.')
+            total_real = float(val_texto)
 
         # 5. Consumos (kWh)
         def extraer_kwh(tipo, texto):
@@ -169,6 +163,7 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0
 
     else:
+        # Lógica genérica
         patrones_consumo = {
             'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh'],
             'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh'],
