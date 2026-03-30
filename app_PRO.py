@@ -42,9 +42,15 @@ def extraer_datos_factura(pdf_path):
         patron_dias = r'Días\s+de\s+consumo:\s*(\d+)'
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
-        patron_total = r'TOTAL\s+FACTURA\s+([\d,.]+)\s*€'
-        match_total = re.search(patron_total, texto_completo)
-        total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
+        
+        # CORRECCIÓN: Suma de Potencia facturada y Energía facturada
+        m_val_pot = re.search(r'Potencia\s+facturada\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_val_ene = re.search(r'Energía\s+facturada\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        
+        v_pot = float(m_val_pot.group(1).replace(',', '.')) if m_val_pot else 0.0
+        v_ene = float(m_val_ene.group(1).replace(',', '.')) if m_val_ene else 0.0
+        total_real = v_pot + v_ene
+        
         excedente = 0.0 
 
     elif es_octopus:
