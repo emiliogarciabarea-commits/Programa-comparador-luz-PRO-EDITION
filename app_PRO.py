@@ -49,7 +49,7 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_octopus:
-        # --- OCTOPUS ENERGY ---
+        # --- OCTOPUS ENERGY ACTUALIZADO ---
         m_fecha = re.search(r'Fecha\s+de\s+emisión:\s*([\d-]+)', texto_completo)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
         
@@ -59,20 +59,20 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Punta\s+([\d,.]+)\s*kW', texto_completo)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
         
-        # Consumos en tabla (P1, P2, P3)
-        m_p1 = re.search(r'P1\s+Punta\s+[\d,.]+\s+[\d,.]+\s+(\d+)', texto_completo)
-        m_p2 = re.search(r'P2\s+Llano\s+[\d,.]+\s+[\d,.]+\s+(\d+)', texto_completo)
-        m_p3 = re.search(r'P3\s+Valle\s+[\d,.]+\s+[\d,.]+\s+(\d+)', texto_completo)
+        # Extracción de consumos por texto Punta/Llano/Valle
+        m_punta = re.search(r'Punta\s+.*?([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_llano = re.search(r'Llano\s+.*?([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_valle = re.search(r'Valle\s+.*?([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         
         consumos = {
-            'punta': float(m_p1.group(1)) if m_p1 else 0.0,
-            'llano': float(m_p2.group(1)) if m_p2 else 0.0,
-            'valle': float(m_p3.group(1)) if m_p3 else 0.0
+            'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
+            'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
+            'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
         
-        # Valor real = Potencia + Energía Activa
-        m_val_pot = re.search(r'Potencia:\s+([\d,.]+)\s*€', texto_completo)
-        m_val_ene = re.search(r'Energía\s+Activa:\s+([\d,.]+)\s*€', texto_completo)
+        # Valor real = Suma de valor junto a "Potencia" y valor junto a "Energía Activa"
+        m_val_pot = re.search(r'Potencia:?\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_val_ene = re.search(r'Energía\s+Activa:?\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
         v_pot = float(m_val_pot.group(1).replace(',', '.')) if m_val_pot else 0.0
         v_ene = float(m_val_ene.group(1).replace(',', '.')) if m_val_ene else 0.0
