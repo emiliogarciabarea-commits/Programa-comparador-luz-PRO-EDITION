@@ -318,6 +318,25 @@ else:
             ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
             ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
 
+            # Preparar hoja de Precios Ganadora (Hoja 4)
+            mejor_tarifa_info = pd.DataFrame()
+            if not ranking_total.empty:
+                nombre_ganadora = ranking_total.iloc[0]['Compañía/Tarifa']
+                fila_ganadora = df_tarifas[df_tarifas.iloc[:, 0] == nombre_ganadora]
+                if not fila_ganadora.empty:
+                    mejor_tarifa_info = pd.DataFrame({
+                        "Concepto": ["Compañía Ganadora", "P1 Potencia (€/kW/día)", "P2 Potencia (€/kW/día)", "Energía Punta (€/kWh)", "Energía Llano (€/kWh)", "Energía Valle (€/kWh)", "Excedente (€/kWh)"],
+                        "Valor": [
+                            nombre_ganadora,
+                            fila_ganadora.iloc[0, 1],
+                            fila_ganadora.iloc[0, 2],
+                            fila_ganadora.iloc[0, 3],
+                            fila_ganadora.iloc[0, 4],
+                            fila_ganadora.iloc[0, 5],
+                            fila_ganadora.iloc[0, 6]
+                        ]
+                    })
+
             st.divider()
             
             if not ranking_total.empty:
@@ -330,11 +349,14 @@ else:
             st.subheader("📊 Comparativa Detallada por Factura")
             st.dataframe(df_comp.drop(columns=['Dias_Factura'], errors='ignore'), use_container_width=True, hide_index=True)
 
+            # GENERACIÓN DEL EXCEL CON 4 HOJAS
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
                 ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
                 df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
+                if not mejor_tarifa_info.empty:
+                    mejor_tarifa_info.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
 
             st.download_button(
                 label="📥 Descargar Informe Completo",
