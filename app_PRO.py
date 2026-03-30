@@ -330,11 +330,43 @@ else:
             st.subheader("📊 Comparativa Detallada por Factura")
             st.dataframe(df_comp.drop(columns=['Dias_Factura'], errors='ignore'), use_container_width=True, hide_index=True)
 
+           # --- GENERACIÓN DE EXCEL CON 4 HOJAS ---
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+                # Hoja 1: Detalle Comparativa
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
+                
+                # Hoja 2: Ranking Ahorro
                 ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
-                df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
+                
+                # Hoja 3: Datos Facturas Originales (Sin la columna "Compañía")
+                df_datos_hoja3 = df_resumen_pdfs.drop(columns=['Compañía'], errors='ignore')
+                df_datos_hoja3.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
+                
+                # Hoja 4: Precios Tarifa Ganadora
+                if not ranking_total.empty:
+                    mejor_opcion_nombre = ranking_total.iloc[0]['Compañía/Tarifa']
+                    # Buscamos los precios de la compañía ganadora en el dataframe original de tarifas
+                    datos_ganadora = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre]
+                    
+                    if not datos_ganadora.empty:
+                        fila = datos_ganadora.iloc[0]
+                        df_precios_ganadora = pd.DataFrame({
+                            "Concepto": [
+                                "Compañía Ganadora", 
+                                "P1 Potencia (€/kW/día)", 
+                                "P2 Potencia (€/kW/día)", 
+                                "Energía Punta (€/kWh)", 
+                                "Energía Llano (€/kWh)", 
+                                "Energía Valle (€/kWh)", 
+                                "Excedente (€/kWh)"
+                            ],
+                            "Valor": [
+                                fila.iloc[0], fila.iloc[1], fila.iloc[2], 
+                                fila.iloc[3], fila.iloc[4], fila.iloc[5], fila.iloc[6]
+                            ]
+                        })
+                        df_precios_ganadora.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
 
             st.download_button(
                 label="📥 Descargar Informe Completo",
