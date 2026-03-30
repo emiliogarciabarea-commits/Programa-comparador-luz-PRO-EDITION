@@ -127,6 +127,7 @@ def extraer_datos_factura(pdf_path):
         m_exc = re.search(r'Valoración\s+excedentes\s*(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(m_exc.group(1).replace(',', '.'))) if m_exc else 0.0
         
+        # --- Modificación solicitada para Naturgy ---
         m_subtotal = re.search(r'Subtotal\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         if m_subtotal:
             total_real = float(m_subtotal.group(1).replace(',', '.'))
@@ -306,8 +307,7 @@ else:
                         resultados_finales.append({
                             "Mes/Fecha": fact['Fecha'], "Compañía/Tarifa": nombre_cia,
                             "Coste (€)": round(coste_estimado, 2), "Ahorro": round(ahorro, 2),
-                            "Dias_Factura": fact['Días'],
-                            "p1": b_pot1, "p2": c_pot2, "ep": d_punta, "el": e_llano, "ev": f_valle, "exc": g_excedente
+                            "Dias_Factura": fact['Días']
                         })
                     except: continue
 
@@ -318,48 +318,26 @@ else:
             ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
             ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
 
-            # --- GENERACIÓN DE LAS 4 HOJAS DEL EXCEL ---
-            # 1. Hoja Precios Tarifa Ganadora
-            mejor_tarifa = ranking_total.iloc[0]['Compañía/Tarifa']
-            row_ganadora = df_solo_ofertas[df_solo_ofertas['Compañía/Tarifa'] == mejor_tarifa].iloc[0]
-            df_precios_ganadora = pd.DataFrame([
-                ["Compañía Ganadora", mejor_tarifa],
-                ["P1 Potencia (€/kW/día)", row_ganadora['p1']],
-                ["P2 Potencia (€/kW/día)", row_ganadora['p2']],
-                ["Energía Punta (€/kWh)", row_ganadora['ep']],
-                ["Energía Llano (€/kWh)", row_ganadora['el']],
-                ["Energía Valle (€/kWh)", row_ganadora['ev']],
-                ["Excedente (€/kWh)", row_ganadora['exc']]
-            ], columns=["Concepto", "Valor"])
-
-            # 2. Hoja Detalle Comparativa (Limpia)
-            df_comp_final = df_comp[["Mes/Fecha", "Compañía/Tarifa", "Coste (€)", "Ahorro", "Dias_Factura"]]
-
-            # 3. Hoja Ranking Ahorro
-            df_ranking_final = ranking_total[["Compañía/Tarifa", "Ahorro"]]
-
-            # 4. Hoja Datos Facturas Originales (SIN COLUMNA COMPAÑÍA)
-            df_originales_final = df_resumen_pdfs.drop(columns=["Compañía"], errors='ignore')
-
             st.divider()
+            
             if not ranking_total.empty:
+                mejor_opcion_nombre = ranking_total.iloc[0]['Compañía/Tarifa']
                 st.subheader("🏆 Resultado del Análisis")
                 c1, c2 = st.columns(2)
-                with c1: st.success(f"La mejor compañía es: **{mejor_tarifa}**")
+                with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
                 with c2: st.metric(label="Ahorro Total Acumulado", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €")
 
             st.subheader("📊 Comparativa Detallada por Factura")
-            st.dataframe(df_comp_final.drop(columns=['Dias_Factura']), use_container_width=True, hide_index=True)
+            st.dataframe(df_comp.drop(columns=['Dias_Factura'], errors='ignore'), use_container_width=True, hide_index=True)
 
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                df_precios_ganadora.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
-                df_ranking_final.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
-                df_originales_final.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
-                df_comp_final.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
+                df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
+                ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
+                df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
 
             st.download_button(
-                label="📥 Descargar Informe Completo (4 Hojas)",
+                label="📥 Descargar Informe Completo",
                 data=buffer_excel.getvalue(),
                 file_name="estudio_ahorro_energetico.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
