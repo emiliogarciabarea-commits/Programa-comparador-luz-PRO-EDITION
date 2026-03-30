@@ -43,14 +43,22 @@ def extraer_datos_factura(pdf_path):
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
         
-        # --- CORRECCIÓN EL CORTE INGLÉS ---
-        # Buscamos los valores a la derecha de "Potencia facturada" y "Energía facturada"
-        m_val_pot_eci = re.search(r'Potencia\s+facturada\s+.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
-        m_val_ene_eci = re.search(r'Energía\s+facturada\s+.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
+        # --- CORRECCIÓN TOTAL REAL EL CORTE INGLÉS ---
+        # Extraer Potencia Facturada (Suma de los valores a la derecha de Punta y Valle)
+        m_pot_punta = re.search(r'Potencia\s+facturada\s+Punta\s+.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_pot_valle = re.search(r'Potencia\s+facturada\s+Valle\s+.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        v_pot_punta = float(m_pot_punta.group(1).replace(',', '.')) if m_pot_punta else 0.0
+        v_pot_valle = float(m_pot_valle.group(1).replace(',', '.')) if m_pot_valle else 0.0
         
-        v_pot = float(m_val_pot_eci.group(1).replace(',', '.')) if m_val_pot_eci else 0.0
-        v_ene = float(m_val_ene_eci.group(1).replace(',', '.')) if m_val_ene_eci else 0.0
-        total_real = v_pot + v_ene
+        # Extraer Energía Facturada (Suma de los valores a la derecha de Punta, Llano y Valle)
+        m_ene_punta = re.search(r'Energía\s+facturada\s+Punta\s+.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_ene_llano = re.search(r'Energía\s+facturada\s+Llano\s+.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_ene_valle = re.search(r'Energía\s+facturada\s+Valle\s+.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        v_ene_punta = float(m_ene_punta.group(1).replace(',', '.')) if m_ene_punta else 0.0
+        v_ene_llano = float(m_ene_llano.group(1).replace(',', '.')) if m_ene_llano else 0.0
+        v_ene_valle = float(m_ene_valle.group(1).replace(',', '.')) if m_ene_valle else 0.0
+        
+        total_real = v_pot_punta + v_pot_valle + v_ene_punta + v_ene_llano + v_ene_valle
         excedente = 0.0 
 
     elif es_octopus:
