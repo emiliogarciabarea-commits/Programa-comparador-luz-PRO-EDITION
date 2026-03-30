@@ -127,7 +127,6 @@ def extraer_datos_factura(pdf_path):
         m_exc = re.search(r'Valoración\s+excedentes\s*(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(m_exc.group(1).replace(',', '.'))) if m_exc else 0.0
         
-        # --- Modificación solicitada para Naturgy ---
         m_subtotal = re.search(r'Subtotal\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         if m_subtotal:
             total_real = float(m_subtotal.group(1).replace(',', '.'))
@@ -320,24 +319,34 @@ else:
 
             st.divider()
             
+            # --- DETERMINAR TARIFA GANADORA ---
+            df_precios_ganadora = pd.DataFrame()
             if not ranking_total.empty:
                 mejor_opcion_nombre = ranking_total.iloc[0]['Compañía/Tarifa']
                 st.subheader("🏆 Resultado del Análisis")
                 c1, c2 = st.columns(2)
                 with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
                 with c2: st.metric(label="Ahorro Total Acumulado", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €")
+                
+                # Extraer precios de la ganadora para el Excel
+                match_precios = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre]
+                if not match_precios.empty:
+                    df_precios_ganadora = match_precios.copy()
 
             st.subheader("📊 Comparativa Detallada por Factura")
             st.dataframe(df_comp.drop(columns=['Dias_Factura'], errors='ignore'), use_container_width=True, hide_index=True)
 
+            # --- BLOQUE DE DESCARGA EXCEL ---
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
                 ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
                 df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
+                if not df_precios_ganadora.empty:
+                    df_precios_ganadora.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
 
             st.download_button(
-                label="📥 Descargar Informe Completo",
+                label="📥 Descargar Informe Completo (4 Hojas)",
                 data=buffer_excel.getvalue(),
                 file_name="estudio_ahorro_energetico.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
