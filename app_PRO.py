@@ -80,6 +80,43 @@ def extraer_datos_factura(pdf_path):
             if m_gen: consumos['punta'] = float(m_gen.group(1))
         excedente = 0.0
 
+    elif es_naturgy:
+        # Buscamos la sección de detalle para acotar la búsqueda de días
+        seccion_detalle = ""
+        m_detalle = re.search(r'3\. Detalle: cómo calculamos tu factura(.*?)(?:4\. Tus últimas lecturas|$)', texto_completo, re.DOTALL | re.IGNORECASE)
+        if m_detalle:
+            seccion_detalle = m_detalle.group(1)
+        
+        # Extraer días solo de esa sección
+        m_dias = re.search(r'(\d+)\s+días', seccion_detalle, re.IGNORECASE)
+        dias = int(m_dias.group(1)) if m_dias else 0
+
+        # El resto de datos de Naturgy se extraen del texto completo por seguridad
+        m_fecha = re.search(r'Fecha\s+de\s+emisión:\s*([\d/]+)', texto_completo, re.IGNORECASE)
+        fecha = m_fecha.group(1) if m_fecha else "No encontrada"
+
+        m_pot = re.search(r'Potencia\s+contratada\s+P1:\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
+        potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
+
+        m_punta = re.search(r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_llano = re.search(r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_valle = re.search(r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        
+        consumos = {
+            'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
+            'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
+            'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
+        }
+
+        m_exc = re.search(r'Subtotal\s+Compensación\s+Excedentes\s*(-?[\d,.]+)', texto_completo, re.IGNORECASE)
+        excedente_valor = abs(float(m_exc.group(1).replace(',', '.'))) if m_exc else 0.0
+        # Intentar sacar los kWh de excedente si es posible, si no, dejar el valor monetario o 0
+        m_exc_kwh = re.search(r'Valoración\s+excedentes.*?(-?\d+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
+        excedente = abs(float(m_exc_kwh.group(1))) if m_exc_kwh else 0.0
+
+        m_total = re.search(r'Total\s+a\s+pagar\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        total_real = float(m_total.group(1).replace(',', '.')) if m_total else 0.0
+
     elif es_endesa_luz:
         m_fecha_etiqueta = re.search(r'Fecha\s+emisión\s+factura:\s*([\d/]{10})', texto_completo, re.IGNORECASE)
         if m_fecha_etiqueta:
@@ -198,6 +235,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
+# --- Código Streamlit (Sigue igual) ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
