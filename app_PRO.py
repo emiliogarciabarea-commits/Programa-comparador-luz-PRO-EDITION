@@ -127,7 +127,6 @@ def extraer_datos_factura(pdf_path):
         m_exc = re.search(r'Valoración\s+excedentes\s*(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(m_exc.group(1).replace(',', '.'))) if m_exc else 0.0
         
-        # --- Modificación solicitada para Naturgy ---
         m_subtotal = re.search(r'Subtotal\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         if m_subtotal:
             total_real = float(m_subtotal.group(1).replace(',', '.'))
@@ -318,25 +317,6 @@ else:
             ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
             ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
 
-            # Preparar hoja de Precios Ganadora (Hoja 4)
-            mejor_tarifa_info = pd.DataFrame()
-            if not ranking_total.empty:
-                nombre_ganadora = ranking_total.iloc[0]['Compañía/Tarifa']
-                fila_ganadora = df_tarifas[df_tarifas.iloc[:, 0] == nombre_ganadora]
-                if not fila_ganadora.empty:
-                    mejor_tarifa_info = pd.DataFrame({
-                        "Concepto": ["Compañía Ganadora", "P1 Potencia (€/kW/día)", "P2 Potencia (€/kW/día)", "Energía Punta (€/kWh)", "Energía Llano (€/kWh)", "Energía Valle (€/kWh)", "Excedente (€/kWh)"],
-                        "Valor": [
-                            nombre_ganadora,
-                            fila_ganadora.iloc[0, 1],
-                            fila_ganadora.iloc[0, 2],
-                            fila_ganadora.iloc[0, 3],
-                            fila_ganadora.iloc[0, 4],
-                            fila_ganadora.iloc[0, 5],
-                            fila_ganadora.iloc[0, 6]
-                        ]
-                    })
-
             st.divider()
             
             if not ranking_total.empty:
@@ -346,17 +326,36 @@ else:
                 with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
                 with c2: st.metric(label="Ahorro Total Acumulado", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €")
 
+                # Preparar datos para la cuarta hoja (Precios Tarifa Ganadora)
+                fila_ganadora = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre].iloc[0]
+                df_ganadora_precios = pd.DataFrame({
+                    "Concepto": ["Compañía Ganadora", "P1 Potencia (€/kW/día)", "P2 Potencia (€/kW/día)", "Energía Punta (€/kWh)", "Energía Llano (€/kWh)", "Energía Valle (€/kWh)", "Excedente (€/kWh)"],
+                    "Valor": [
+                        fila_ganadora.iloc[0], fila_ganadora.iloc[1], fila_ganadora.iloc[2],
+                        fila_ganadora.iloc[3], fila_ganadora.iloc[4], fila_ganadora.iloc[5],
+                        fila_ganadora.iloc[6]
+                    ]
+                })
+
             st.subheader("📊 Comparativa Detallada por Factura")
             st.dataframe(df_comp.drop(columns=['Dias_Factura'], errors='ignore'), use_container_width=True, hide_index=True)
 
-            # GENERACIÓN DEL EXCEL CON 4 HOJAS
+            # --- GENERACIÓN DE EXCEL DE 4 HOJAS ---
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+                # 1. Detalle Comparativa
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
+                
+                # 2. Ranking Ahorro
                 ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
-                df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
-                if not mejor_tarifa_info.empty:
-                    mejor_tarifa_info.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
+                
+                # 3. Datos Facturas Originales (Sin la columna Compañía)
+                df_originales_export = df_resumen_pdfs.drop(columns=['Compañía'], errors='ignore')
+                df_originales_export.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
+                
+                # 4. Precios Tarifa Ganadora
+                if not ranking_total.empty:
+                    df_ganadora_precios.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
 
             st.download_button(
                 label="📥 Descargar Informe Completo",
