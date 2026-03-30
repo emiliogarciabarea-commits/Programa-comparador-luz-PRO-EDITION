@@ -25,7 +25,6 @@ def extraer_datos_factura(pdf_path):
 
     if es_el_corte_ingles:
         compania = "El Corte Inglés"
-        # Extracción de consumos
         patron_cons_eci = r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)'
         match_cons = re.search(patron_cons_eci, texto_completo)
         
@@ -34,40 +33,25 @@ def extraer_datos_factura(pdf_path):
             'llano': float(match_cons.group(2).replace(',', '.')) if match_cons else 0.0,
             'valle': float(match_cons.group(3).replace(',', '.')) if match_cons else 0.0
         }
-        
-        # Extracción de Potencia contratada (kW)
         patron_potencia = r'Potencia\s+contratada\s+kW\s+([\d,.]+)'
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
-        
-        # Extracción de Fecha y Días
         patron_fecha = r'Fecha\s+de\s+Factura:\s*([\d/]+)'
         match_fecha = re.search(patron_fecha, texto_completo)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
-        
         patron_dias = r'Días\s+de\s+consumo:\s*(\d+)'
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
         
-        # --- LÓGICA CORREGIDA PARA TOTAL REAL (E Corte Inglés) ---
-        total_potencia = 0.0
-        total_energia = 0.0
+        # --- NUEVA LÓGICA TOTAL REAL EL CORTE INGLÉS ---
+        # Buscamos los valores en la columna de la derecha (terminan en €) para Potencia y Energía
+        valores_potencia = re.findall(r'Potencia\s+facturada.*?([\d,.]+)\s*€', texto_completo, re.DOTALL | re.IGNORECASE)
+        valores_energia = re.findall(r'Energía\s+facturada.*?([\d,.]+)\s*€', texto_completo, re.DOTALL | re.IGNORECASE)
         
-        lineas = texto_completo.split('\n')
-        for i, linea in enumerate(lineas):
-            # Sumar valores de Potencia facturada (Punta + Valle)
-            if "Potencia facturada" in linea:
-                valores = re.findall(r'([\d,.]+)\s*€', linea)
-                for val in valores:
-                    total_potencia += float(val.replace(',', '.'))
-            
-            # Sumar valores de Energía facturada (Punta + Llano + Valle)
-            if "Energia facturada" in linea or "Energía facturada" in linea:
-                valores = re.findall(r'([\d,.]+)\s*€', linea)
-                for val in valores:
-                    total_energia += float(val.replace(',', '.'))
+        v_pot_max = max([float(v.replace(',', '.')) for v in valores_potencia]) if valores_potencia else 0.0
+        v_ene_max = max([float(v.replace(',', '.')) for v in valores_energia]) if valores_energia else 0.0
         
-        total_real = total_potencia + total_energia
+        total_real = v_pot_max + v_ene_max
         excedente = 0.0 
 
     elif es_octopus:
