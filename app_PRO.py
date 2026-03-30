@@ -22,7 +22,6 @@ def extraer_datos_factura(pdf_path):
     es_octopus = re.search(r'octopus\s+energy', texto_completo, re.IGNORECASE)
 
     compania = "Genérica / Desconocida" # Valor por defecto
-    total_real = 0.0
 
     if es_el_corte_ingles:
         compania = "El Corte Inglés"
@@ -37,15 +36,24 @@ def extraer_datos_factura(pdf_path):
         patron_potencia = r'Potencia\s+contratada\s+kW\s+([\d,.]+)'
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
+        
         patron_fecha = r'Fecha\s+de\s+Factura:\s*([\d/]+)'
         match_fecha = re.search(patron_fecha, texto_completo)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
+        
         patron_dias = r'Días\s+de\s+consumo:\s*(\d+)'
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
-        patron_total = r'TOTAL\s+FACTURA\s+([\d,.]+)\s*€'
-        match_total = re.search(patron_total, texto_completo)
-        total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
+        
+        # --- LÓGICA ESPECÍFICA PARA TOTAL REAL (SUMA DE MAX POTENCIA Y MAX ENERGÍA) ---
+        # Buscamos valores de moneda (€) en las filas específicas
+        importes_potencia = re.findall(r'Potencia\s+facturada.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
+        importes_energia = re.findall(r'Energía\s+facturada.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
+        
+        val_pot = max([float(v.replace(',', '.')) for v in importes_potencia]) if importes_potencia else 0.0
+        val_ene = max([float(v.replace(',', '.')) for v in importes_energia]) if importes_energia else 0.0
+        
+        total_real = val_pot + val_ene
         excedente = 0.0 
 
     elif es_octopus:
@@ -80,7 +88,7 @@ def extraer_datos_factura(pdf_path):
         dias = int(m_dias_meta.group(1)) if m_dias_meta else 0
         m_pot_meta = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot_meta.group(1).replace(',', '.')) if m_pot_meta else 0.0
-        
+        total_real = 0.0
         lineas = texto_completo.split('\n')
         for linea in lineas:
             linea_limpia = linea.strip()
@@ -221,26 +229,18 @@ def extraer_datos_factura(pdf_path):
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        # --- Lógica de suma de valores máximos por fila (Potencia y Energía) ---
-        v_pot_max = 0.0
-        v_ene_max = 0.0
-        
-        for linea in texto_completo.split('\n'):
-            if "Potencia facturada" in linea:
-                valores = re.findall(r'([\d,.]+)\s*€', linea)
-                if valores:
-                    v_pot_max = max([float(v.replace(',', '.')) for v in valores])
-            if "Energía facturada" in linea:
-                valores = re.findall(r'([\d,.]+)\s*€', linea)
-                if valores:
-                    v_ene_max = max([float(v.replace(',', '.')) for v in valores])
-        
-        total_real = v_pot_max + v_ene_max
+        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s+.*?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s+.*?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        if m_val_pot_xxi and m_val_ene_xxi:
+            total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
+        else:
+            match_total = re.search(r'Total\s+electricidad\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
     return {
         "Compañía": compania, "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
-        "Consumo Punta (kWh)": consumos.get('punta', 0.0), "Consumo Llano (kWh)": consumos.get('llano', 0.0),
-        "Consumo Valle (kWh)": consumos.get('valle', 0.0), "Excedente (kWh)": excedente,
+        "Consumo Punta (kWh)": consumos['punta'], "Consumo Llano (kWh)": consumos['llano'],
+        "Consumo Valle (kWh)": consumos['valle'], "Excedente (kWh)": excedente,
         "Total Real": round(total_real, 2)
     }
 
