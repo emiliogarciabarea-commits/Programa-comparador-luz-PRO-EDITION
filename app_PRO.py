@@ -106,24 +106,16 @@ def extraer_datos_factura(pdf_path):
 
     elif es_naturgy:
         compania = "Naturgy"
+        # Días: Junto a "Financiación de Bono Social"
+        m_dias = re.search(r'Financiación\s+de\s+Bono\s+Social\s+(\d+)\s+días', texto_completo, re.IGNORECASE)
+        dias = int(m_dias.group(1)) if m_dias else 0
+        
         m_fecha = re.search(r'Fecha\s+de\s+emisión:\s*([\d/]+)', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
         
         m_pot = re.search(r'Potencia\s+contratada\s+P1:\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
         
-        # Corregido: Días junto a Financiación de Bono Social
-        m_dias = re.search(r'Financiación\s+de\s+Bono\s+Social\s+(\d+)\s+días', texto_completo, re.IGNORECASE)
-        dias = int(m_dias.group(1)) if m_dias else 0
-        
-        # Corregido: Valor real junto a Subtotal (€)
-        m_total = re.search(r'Subtotal\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        total_real = float(m_total.group(1).replace(',', '.')) if m_total else 0.0
-        
-        # Corregido: Excedentes kWh junto a Valoración excedentes
-        m_exc = re.search(r'Valoración\s+excedentes\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        excedente = float(m_exc.group(1).replace(',', '.')) if m_exc else 0.0
-
         m_punta = re.search(r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         m_llano = re.search(r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         m_valle = re.search(r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
@@ -132,6 +124,14 @@ def extraer_datos_factura(pdf_path):
             'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
             'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
+        
+        # Excedente: Valor en kWh junto a "Valoración excedentes"
+        m_exc = re.search(r'Valoración\s+excedentes\s*.*?([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        excedente = float(m_exc.group(1).replace(',', '.')) if m_exc else 0.0
+        
+        # Valor Real: El valor en € junto a "Subtotal"
+        m_total = re.search(r'Subtotal\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        total_real = float(m_total.group(1).replace(',', '.')) if m_total else 0.0
 
     elif es_endesa_luz:
         compania = "Endesa Energía"
