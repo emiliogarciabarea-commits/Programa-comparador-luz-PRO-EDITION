@@ -43,22 +43,19 @@ def extraer_datos_factura(pdf_path):
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
         
-        # --- CORRECCIÓN TOTAL REAL EL CORTE INGLÉS ---
-        # Extraer Potencia Facturada (Suma de los valores a la derecha de Punta y Valle)
-        m_pot_punta = re.search(r'Potencia\s+facturada\s+Punta\s+.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_pot_valle = re.search(r'Potencia\s+facturada\s+Valle\s+.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        v_pot_punta = float(m_pot_punta.group(1).replace(',', '.')) if m_pot_punta else 0.0
-        v_pot_valle = float(m_pot_valle.group(1).replace(',', '.')) if m_pot_valle else 0.0
+        # --- Lógica corregida para Total Real en El Corte Inglés ---
+        # 1. Potencia facturada (Suma de Punta y Valle)
+        m_pot_punta = re.search(r'Punta\s+[\d,.]+\s+[\d,.]+\s+([\d,.]+)\s*€', texto_completo)
+        m_pot_valle = re.search(r'Valle\s+[\d,.]+\s+[\d,.]+\s+([\d,.]+)\s*€', texto_completo)
+        v_pot_p = float(m_pot_punta.group(1).replace(',', '.')) if m_pot_punta else 0.0
+        v_pot_v = float(m_pot_valle.group(1).replace(',', '.')) if m_pot_valle else 0.0
         
-        # Extraer Energía Facturada (Suma de los valores a la derecha de Punta, Llano y Valle)
-        m_ene_punta = re.search(r'Energía\s+facturada\s+Punta\s+.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_ene_llano = re.search(r'Energía\s+facturada\s+Llano\s+.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_ene_valle = re.search(r'Energía\s+facturada\s+Valle\s+.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        v_ene_punta = float(m_ene_punta.group(1).replace(',', '.')) if m_ene_punta else 0.0
-        v_ene_llano = float(m_ene_llano.group(1).replace(',', '.')) if m_ene_llano else 0.0
-        v_ene_valle = float(m_ene_valle.group(1).replace(',', '.')) if m_ene_valle else 0.0
+        # 2. Energía facturada (Suma de Punta, Llano y Valle)
+        # Buscamos la sección de "Energía facturada" que viene después del precio por kWh
+        m_ene_detalles = re.findall(r'Energia\s+facturada\s+([\d,.]+)\s*€', texto_completo)
+        v_ene_total = sum([float(val.replace(',', '.')) for val in m_ene_detalles])
         
-        total_real = v_pot_punta + v_pot_valle + v_ene_punta + v_ene_llano + v_ene_valle
+        total_real = v_pot_p + v_pot_v + v_ene_total
         excedente = 0.0 
 
     elif es_octopus:
@@ -120,12 +117,19 @@ def extraer_datos_factura(pdf_path):
 
     elif es_naturgy:
         compania = "Naturgy"
+        # Fecha de emisión
         m_fecha = re.search(r'Fecha\s+de\s+emisión:\s*([\d/]+)', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
+        
+        # Días (Junto a Financiación de Bono Social)
         m_dias = re.search(r'Financiación\s+de\s+Bono\s+Social\s+(\d+)\s+días', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
+        
+        # Potencia
         m_pot = re.search(r'Potencia\s+contratada\s+P1:\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
+        
+        # Consumos
         m_punta = re.search(r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         m_llano = re.search(r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         m_valle = re.search(r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
@@ -134,8 +138,12 @@ def extraer_datos_factura(pdf_path):
             'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
             'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
+        
+        # Excedente (kWh)
         m_exc = re.search(r'Valoración\s+excedentes\s*(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(m_exc.group(1).replace(',', '.'))) if m_exc else 0.0
+        
+        # Total Real (Junto a Subtotal)
         m_total = re.search(r'Subtotal\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         total_real = float(m_total.group(1).replace(',', '.')) if m_total else 0.0
 
@@ -209,6 +217,7 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0
 
     else:
+        # Lógica para Energía XXI o Genérica
         if es_xxi: compania = "Energía XXI"
         patrones_consumo = {
             'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh'],
