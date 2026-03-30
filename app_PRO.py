@@ -44,16 +44,19 @@ def extraer_datos_factura(pdf_path):
         patron_dias = r'Días\s+de\s+consumo:\s*(\d+)'
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
+
+        # --- Lógica de Valor Real Complejo (ECI) ---
+        def buscar_euro(patron, texto):
+            m = re.search(patron, texto, re.IGNORECASE)
+            if m:
+                return float(m.group(1).replace(',', '.'))
+            return 0.0
+
+        base_imponible = buscar_euro(r'Base\s+imponible\s+([\d,.]+)\s*€', texto_completo)
+        alquiler = buscar_euro(r'Alquiler\s+equipo\s+de\s+medida\s+([\d,.]+)\s*€', texto_completo)
+        rd_8_2023 = buscar_euro(r'RD\s+8/2023\s+([\d,.]+)\s*€', texto_completo)
         
-        # --- LÓGICA ESPECÍFICA PARA TOTAL REAL (SUMA DE MAX POTENCIA Y MAX ENERGÍA) ---
-        # Buscamos valores de moneda (€) en las filas específicas
-        importes_potencia = re.findall(r'Potencia\s+facturada.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
-        importes_energia = re.findall(r'Energía\s+facturada.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
-        
-        val_pot = max([float(v.replace(',', '.')) for v in importes_potencia]) if importes_potencia else 0.0
-        val_ene = max([float(v.replace(',', '.')) for v in importes_energia]) if importes_energia else 0.0
-        
-        total_real = val_pot + val_ene
+        total_real = base_imponible - alquiler - rd_8_2023
         excedente = 0.0 
 
     elif es_octopus:
