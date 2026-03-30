@@ -36,25 +36,23 @@ def extraer_datos_factura(pdf_path):
         patron_potencia = r'Potencia\s+contratada\s+kW\s+([\d,.]+)'
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
-        
         patron_fecha = r'Fecha\s+de\s+Factura:\s*([\d/]+)'
         match_fecha = re.search(patron_fecha, texto_completo)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
-        
         patron_dias = r'Días\s+de\s+consumo:\s*(\d+)'
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
-
-        # --- Lógica de Valor Real Complejo (ECI) ---
-        def buscar_euro(patron, texto):
+        
+        # --- NUEVA LÓGICA VALOR REAL ECI ---
+        def buscar_valor_eci(patron, texto):
             m = re.search(patron, texto, re.IGNORECASE)
             if m:
                 return float(m.group(1).replace(',', '.'))
             return 0.0
 
-        base_imponible = buscar_euro(r'Base\s+imponible\s+([\d,.]+)\s*€', texto_completo)
-        alquiler = buscar_euro(r'Alquiler\s+equipo\s+de\s+medida\s+([\d,.]+)\s*€', texto_completo)
-        rd_8_2023 = buscar_euro(r'RD\s+8/2023\s+([\d,.]+)\s*€', texto_completo)
+        base_imponible = buscar_valor_eci(r'Base\s+imponible\s+([\d,.]+)\s*€', texto_completo)
+        alquiler = buscar_valor_eci(r'Alquiler\s+equipo\s+de\s+medida\s+([\d,.]+)\s*€', texto_completo)
+        rd_8_2023 = buscar_valor_eci(r'RD\s+8/2023\s+([\d,.]+)\s*€', texto_completo)
         
         total_real = base_imponible - alquiler - rd_8_2023
         excedente = 0.0 
