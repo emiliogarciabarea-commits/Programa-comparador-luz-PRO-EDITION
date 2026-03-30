@@ -43,18 +43,16 @@ def extraer_datos_factura(pdf_path):
         match_dias = re.search(patron_dias, texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
         
-        # --- NUEVA LÓGICA VALOR REAL ECI ---
-        def buscar_valor_eci(patron, texto):
-            m = re.search(patron, texto, re.IGNORECASE)
-            if m:
-                return float(m.group(1).replace(',', '.'))
-            return 0.0
-
-        base_imponible = buscar_valor_eci(r'Base\s+imponible\s+([\d,.]+)\s*€', texto_completo)
-        alquiler = buscar_valor_eci(r'Alquiler\s+equipo\s+de\s+medida\s+([\d,.]+)\s*€', texto_completo)
-        rd_8_2023 = buscar_valor_eci(r'RD\s+8/2023\s+([\d,.]+)\s*€', texto_completo)
+        # --- LÓGICA DE VALOR REAL EL CORTE INGLÉS ---
+        m_base = re.search(r'Base\s+Imponible\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_alquiler = re.search(r'Alquiler\s+equipo\s+de\s+medida.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_rd = re.search(r'RD\s+8/2023.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
-        total_real = base_imponible - alquiler - rd_8_2023
+        base_v = float(m_base.group(1).replace(',', '.')) if m_base else 0.0
+        alq_v = float(m_alquiler.group(1).replace(',', '.')) if m_alquiler else 0.0
+        rd_v = float(m_rd.group(1).replace(',', '.')) if m_rd else 0.0
+        
+        total_real = base_v - alq_v - rd_v
         excedente = 0.0 
 
     elif es_octopus:
@@ -123,8 +121,8 @@ def extraer_datos_factura(pdf_path):
         m_pot = re.search(r'Potencia\s+contratada\s+P1:\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
         m_punta = re.search(r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_llano = re.search(r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        m_valle = re.search(r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_llano = re.search(r'Consumo\s+electricity\s+Llano\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
+        m_valle = re.search(r'Consumo\s+electricity\s+Valle\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         consumos = {
             'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
             'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
