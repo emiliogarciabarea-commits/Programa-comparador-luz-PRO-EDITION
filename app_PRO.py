@@ -275,6 +275,7 @@ else:
 
             df_tarifas = pd.read_excel(excel_path)
             resultados_finales = []
+            df_precios_ganadora = pd.DataFrame()
 
             for _, fact in df_resumen_pdfs.iterrows():
                 resultados_finales.append({
@@ -319,24 +320,23 @@ else:
 
             st.divider()
             
-            # --- DETERMINAR TARIFA GANADORA ---
-            df_precios_ganadora = pd.DataFrame()
             if not ranking_total.empty:
                 mejor_opcion_nombre = ranking_total.iloc[0]['Compañía/Tarifa']
                 st.subheader("🏆 Resultado del Análisis")
                 c1, c2 = st.columns(2)
                 with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
                 with c2: st.metric(label="Ahorro Total Acumulado", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €")
-                
-                # Extraer precios de la ganadora para el Excel
-                match_precios = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre]
-                if not match_precios.empty:
-                    df_precios_ganadora = match_precios.copy()
+
+                # Preparar datos de la ganadora para la 4ta hoja
+                fila_ganadora = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre].iloc[0]
+                df_precios_ganadora = pd.DataFrame({
+                    "Concepto": ["Compañía Ganadora", "P1 Potencia (€/kW/día)", "P2 Potencia (€/kW/día)", "Energía Punta (€/kWh)", "Energía Llano (€/kWh)", "Energía Valle (€/kWh)", "Excedente (€/kWh)"],
+                    "Valor": [fila_ganadora.iloc[0], fila_ganadora.iloc[1], fila_ganadora.iloc[2], fila_ganadora.iloc[3], fila_ganadora.iloc[4], fila_ganadora.iloc[5], fila_ganadora.iloc[6]]
+                })
 
             st.subheader("📊 Comparativa Detallada por Factura")
             st.dataframe(df_comp.drop(columns=['Dias_Factura'], errors='ignore'), use_container_width=True, hide_index=True)
 
-            # --- BLOQUE DE DESCARGA EXCEL ---
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
