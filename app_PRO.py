@@ -280,7 +280,7 @@ else:
             for _, fact in df_resumen_pdfs.iterrows():
                 resultados_finales.append({
                     "Mes/Fecha": fact['Fecha'],
-                    "Compañía/Tarifa": f"📍 TU FACTURA ({fact['Compañía']})",
+                    "Compañía/Tarifa": f"📍 TU FACTURA ACTUAL",
                     "Coste (€)": fact['Total Real'],
                     "Ahorro": 0.0,
                     "Dias_Factura": fact['Días']
