@@ -276,6 +276,9 @@ else:
 
             df_tarifas = pd.read_excel(excel_path)
             resultados_finales = []
+            
+            # Para la cuarta hoja (Precios Tarifa Ganadora)
+            datos_ganadora = []
 
             for _, fact in df_resumen_pdfs.iterrows():
                 resultados_finales.append({
@@ -307,7 +310,9 @@ else:
                         resultados_finales.append({
                             "Mes/Fecha": fact['Fecha'], "Compañía/Tarifa": nombre_cia,
                             "Coste (€)": round(coste_estimado, 2), "Ahorro": round(ahorro, 2),
-                            "Dias_Factura": fact['Días']
+                            "Dias_Factura": fact['Días'],
+                            # Datos auxiliares para la hoja 4
+                            "p1": b_pot1, "p2": c_pot2, "ep": d_punta, "el": e_llano, "ev": f_valle, "exc": g_excedente
                         })
                     except: continue
 
@@ -318,6 +323,23 @@ else:
             ranking_total = df_solo_ofertas.groupby("Compañía/Tarifa")["Ahorro"].sum().reset_index()
             ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
 
+            # Generar datos para la cuarta hoja basado en el ganador
+            if not ranking_total.empty:
+                ganador_nombre = ranking_total.iloc[0]['Compañía/Tarifa']
+                # Buscamos los precios de esa tarifa en los resultados (cogemos el primero que aparezca)
+                fila_ganador = df_solo_ofertas[df_solo_ofertas["Compañía/Tarifa"] == ganador_nombre].iloc[0]
+                datos_ganadora = [
+                    {"Concepto": "Compañía Ganadora", "Valor": ganador_nombre},
+                    {"Concepto": "P1 Potencia (€/kW/día)", "Valor": fila_ganador["p1"]},
+                    {"Concepto": "P2 Potencia (€/kW/día)", "Valor": fila_ganador["p2"]},
+                    {"Concepto": "Energía Punta (€/kWh)", "Valor": fila_ganador["ep"]},
+                    {"Concepto": "Energía Llano (€/kWh)", "Valor": fila_ganador["el"]},
+                    {"Concepto": "Energía Valle (€/kWh)", "Valor": fila_ganador["ev"]},
+                    {"Concepto": "Excedente (€/kWh)", "Valor": fila_ganador["exc"]}
+                ]
+            
+            df_ganadora = pd.DataFrame(datos_ganadora)
+
             st.divider()
             
             if not ranking_total.empty:
@@ -327,10 +349,9 @@ else:
                 with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
                 with c2: st.metric(label="Ahorro Total Acumulado", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €")
 
-            # --- PARTE AÑADIDA: VISUALIZACIÓN IGUAL A LA FOTO ---
             st.subheader("📊 Comparativa Detallada por Factura")
             
-            df_mostrar = df_comp.drop(columns=['Dias_Factura'], errors='ignore')
+            df_mostrar = df_comp.drop(columns=['Dias_Factura', 'p1', 'p2', 'ep', 'el', 'ev', 'exc'], errors='ignore')
             
             st.dataframe(
                 df_mostrar,
@@ -347,9 +368,19 @@ else:
 
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
+                # Hoja 1: Detalle Comparativa
+                df_comp_excel = df_comp.drop(columns=['p1', 'p2', 'ep', 'el', 'ev', 'exc'], errors='ignore')
+                df_comp_excel.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
+                
+                # Hoja 2: Ranking Ahorro
                 ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
-                df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
+                
+                # Hoja 3: Datos Facturas Originales (Eliminando nombre de compañía)
+                df_hoja3 = df_resumen_pdfs.drop(columns=["Compañía"], errors='ignore')
+                df_hoja3.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
+                
+                # Hoja 4: Precios Tarifa Ganadora
+                df_ganadora.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
 
             st.download_button(
                 label="📥 Descargar Informe Completo",
