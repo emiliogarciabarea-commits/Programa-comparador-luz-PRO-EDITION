@@ -120,11 +120,9 @@ def extraer_datos_factura(pdf_path):
         m_valle = re.search(r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         consumos = {
             'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
-            'llano': float(m_llano.group(2).replace(',', '.')) if m_llano else 0.0, # Note: corregido el índice a group(1) si corresponde
-            'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
+            'llano': float(m_llano.group(2).replace(',', '.')) if m_llano else 0.0,
+            'valle': float(m_valle.group(3).replace(',', '.')) if m_valle else 0.0
         }
-        # Corrección rápida para el error de índice en llano si existiera
-        if m_llano: consumos['llano'] = float(m_llano.group(1).replace(',', '.'))
         
         m_exc = re.search(r'Valoración\s+excedentes\s*(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(m_exc.group(1).replace(',', '.'))) if m_exc else 0.0
