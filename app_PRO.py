@@ -218,15 +218,19 @@ def extraer_datos_factura(pdf_path):
                 if match:
                     consumos[tramo] = float(match.group(1).replace(',', '.'))
                     break
-        patron_potencia = r'(?:Potencia\s+contratada(?:\s+en\s+punta-llano|\s+P1)?):\s*([\d,.]+)\s*kW'
+        
+        # --- CAMBIOS SOLICITADOS ---
+        # Potencia contratada: busca el valor que acompaña a kW
+        patron_potencia = r'(?:Potencia\s+contratada.*?|)\s*([\d,.]+)\s*kW'
         match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
-        
-        # --- BUSQUEDA DE FECHA FLEXIBLE (AÑADIDA OPCIÓN FECHA DE CARGO) ---
+
+        # Fecha: Incluye "Fecha de cargo" con formato flexible de fecha
         patron_fecha = r'(?:emitida\s+el|Fecha\s+de\s+emisión:|Fecha\s+de\s+cargo:)\s*([\d/]+\s*(?:de\s+\w+\s+de\s+)?\d{2,4})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
-        
+        # ---------------------------
+
         match_dias = re.search(r'(\d+)\s*días', texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
