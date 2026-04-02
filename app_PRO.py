@@ -223,9 +223,11 @@ def extraer_datos_factura(pdf_path):
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        patron_fecha = r'Fecha\s+de\s+cargo:\s*([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
+        # --- CORRECCIÓN FECHA ENERGÍA XXI ---
+        # Buscamos de forma más flexible para evitar fallos por saltos de línea o formato del mes
+        patron_fecha = r'Fecha\s+de\s+cargo:\s*(.*)'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
-        fecha = match_fecha.group(1) if match_fecha else "No encontrada"
+        fecha = match_fecha.group(1).strip() if match_fecha else "No encontrada"
         
         match_dias = re.search(r'(\d+)\s*días', texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
@@ -233,14 +235,16 @@ def extraer_datos_factura(pdf_path):
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        # Suma de Potencia + Energía consumida con flexibilidad de saltos de línea
+        # --- CORRECCIÓN TOTAL REAL ENERGÍA XXI ---
+        # Intentamos primero la suma y si no el TOTAL IMPORTE FACTURA que es el campo real en Energía XXI
         m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s*[\n\r]*\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s*[\n\r]*\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
         if m_val_pot_xxi and m_val_ene_xxi:
             total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
         else:
-            match_total = re.search(r'Total\s+electricidad\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            # Plan B: Buscar el campo total final exacto de Energía XXI
+            match_total = re.search(r'TOTAL\s+IMPORTE\s+FACTURA\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
             total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
     return {
@@ -362,4 +366,3 @@ else:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
-
