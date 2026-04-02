@@ -206,8 +206,7 @@ def extraer_datos_factura(pdf_path):
     else:
         if es_xxi: 
             compania = "Energía XXI"
-            
-            # --- MEJORA ESPECÍFICA ENERGÍA XXI ---
+            # Soporte para tablas de Energía XXI
             patrones_consumo = {
                 'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'P1\s*\(punta\).*?([\d,.]+)\s*kWh'],
                 'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'P2\s*\(llano\).*?([\d,.]+)\s*kWh'],
@@ -230,23 +229,23 @@ def extraer_datos_factura(pdf_path):
             match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
             fecha = match_fecha.group(1) if match_fecha else "No encontrada"
             
-            # Captura días en formato (28 días)
+            # Detecta (28 días)
             match_dias = re.search(r'\((\d+)\s*días\)', texto_completo)
             dias = int(match_dias.group(1)) if match_dias else 0
             
             match_excedente = re.search(r'Valoración\s+excedentes.*?(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
             excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
             
-            # Manejo de comillas y comas en tablas de resumen para Importe Real
-            m_val_pot = re.search(r'Por\s+potencia\s+contratada\s*"?\s*,\s*"?\s*([\d,.]+)\s*€', texto_completo)
-            m_val_ene = re.search(r'Por\s+energía\s+consumida\s*"?\s*,\s*"?\s*([\d,.]+)\s*€', texto_completo)
-            if m_val_pot and m_val_ene:
-                total_real = float(m_val_pot.group(1).replace(',', '.')) + float(m_val_ene.group(1).replace(',', '.'))
+            # Suma de conceptos principales para Energía XXI (evita errores con comillas en tablas)
+            m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s*"?\s*,\s*"?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s*"?\s*,\s*"?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            if m_val_pot_xxi and m_val_ene_xxi:
+                total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
             else:
                 match_total = re.search(r'TOTAL\s+IMPORTE\s+FACTURA\s*"?\s*,\s*"?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
                 total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
         else:
-            # Caso genérico si no es ninguna conocida
+            # Fallback para compañías genéricas no identificadas
             consumos = {'punta': 0.0, 'llano': 0.0, 'valle': 0.0}
             potencia = 0.0
             fecha = "No encontrada"
@@ -256,8 +255,8 @@ def extraer_datos_factura(pdf_path):
 
     return {
         "Compañía": compania, "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
-        "Consumo Punta (kWh)": consumos['punta'], "Consumo Llano (kWh)": consumos['llano'],
-        "Consumo Valle (kWh)": consumos['valle'], "Excedente (kWh)": excedente,
+        "Consumo Punta (kWh)": consumos.get('punta', 0.0), "Consumo Llano (kWh)": consumos.get('llano', 0.0),
+        "Consumo Valle (kWh)": consumos.get('valle', 0.0), "Excedente (kWh)": excedente,
         "Total Real": round(total_real, 2)
     }
 
