@@ -11,13 +11,12 @@ def extraer_datos_factura(pdf_path):
         for pagina in pdf.pages:
             texto_completo += pagina.extract_text() + "\n"
 
-    # --- LIMPIEZA DE TEXTO (Clave para Energía XXI) ---
-    # Eliminamos comillas y normalizamos espacios para que el regex no se pierda
-    texto_limpio = texto_completo.replace('"', '').replace('\n', ' ')
-
+    # --- LIMPIEZA AGRESIVA PARA ENERGÍA XXI ---
+    # Quitamos comillas y convertimos saltos de línea en espacios para que sea una sola línea de texto
+    texto_limpio = texto_completo.replace('"', '').replace('\n', ' ').replace('\r', ' ')
+    
     # --- DETECCIÓN DE COMPAÑÍA ---
     es_xxi = re.search(r'Energía\s+XXI', texto_limpio, re.I)
-    es_octopus = re.search(r'octopus\s+energy', texto_limpio, re.I)
     
     compania = "Genérica"
     total_real = 0.0
@@ -27,40 +26,31 @@ def extraer_datos_factura(pdf_path):
     if es_xxi:
         compania = "Energía XXI"
         
-        # 1. Extraer Importes: Potencia y Energía (Suma de ambos)
-        # Buscamos el texto y el primer número con coma que le siga antes del símbolo €
-        m_pot = re.search(r'Por\s+potencia\s+contratada\s*,?\s*([\d,.]+)\s*€', texto_limpio, re.I)
-        m_ene = re.search(r'Por\s+energía\s+consumida\s*,?\s*([\d,.]+)\s*€', texto_limpio, re.I)
+        # 1. SUMA DE POTENCIA + ENERGÍA (IGNORANDO EL RESTO)
+        # Buscamos el número (ej: 7,98) que sigue a los conceptos clave
+        m_pot = re.search(r'potencia\s+contratada\s*,\s*([\d,.]+)\s*€', texto_limpio, re.I)
+        m_ene = re.search(r'energía\s+consumida\s*,\s*([\d,.]+)\s*€', texto_limpio, re.I)
         
         v_pot = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
         v_ene = float(m_ene.group(1).replace(',', '.')) if m_ene else 0.0
         
-        # IMPORTANTE: Solo la suma de estos dos, ignorando el resto de la factura
+        # El "Total Real" ahora es estrictamente la suma de estos dos términos
         total_real = v_pot + v_ene
 
-        # 2. Consumos (P1, P2, P3)
+        # 2. CONSUMOS kWh (P1, P2, P3)
         for tramo, p in [('punta', 'P1'), ('llano', 'P2'), ('valle', 'P3')]:
             m = re.search(rf'{p}:?\s*([\d,.]+)\s*kWh', texto_limpio, re.I)
             if m: consumos[tramo] = float(m.group(1).replace(',', '.'))
 
-        # 3. Datos generales
-        m_pot_kw = re.search(r'([\d,.]+)\s*kW', texto_limpio)
-        if m_pot_kw: potencia = float(m_pot_kw.group(1).replace(',', '.'))
+        # 3. OTROS DATOS (kW, Días, Fecha)
+        m_kw = re.search(r'([\d,.]+)\s*kW', texto_limpio)
+        potencia = float(m_kw.group(1).replace(',', '.')) if m_kw else 0.0
         
-        m_dias = re.search(r'(\d+)\s*días', texto_limpio)
-        if m_dias: dias = int(m_dias.group(1))
+        m_d = re.search(r'\((\d+)\s*días\)', texto_limpio) or re.search(r'(\d+)\s*días', texto_limpio)
+        dias = int(m_d.group(1)) if m_d else 0
         
-        m_fecha = re.search(r'Fecha\s+de\s+cargo:\s*([\d/]+)', texto_limpio, re.I)
-        if m_fecha: fecha = m_fecha.group(1)
-
-    elif es_octopus:
-        compania = "Octopus Energy"
-        # Lógica simplificada para Octopus sumando solo Potencia + Energía Activa
-        m_v_pot = re.search(r'Potencia:?\s+([\d,.]+)\s*€', texto_limpio, re.I)
-        m_v_ene = re.search(r'Energía\s+Activa:?\s+([\d,.]+)\s*€', texto_limpio, re.I)
-        total_real = (float(m_v_pot.group(1).replace(',', '.')) if m_v_pot else 0.0) + \
-                     (float(m_v_ene.group(1).replace(',', '.')) if m_v_ene else 0.0)
-        # (Resto de campos para Octopus...)
+        m_f = re.search(r'Fecha\s+de\s+cargo:\s*([\d/]+)', texto_limpio, re.I)
+        fecha = m_f.group(1) if m_f else "No encontrada"
 
     return {
         "Compañía": compania, "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
@@ -69,11 +59,11 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# --- INTERFAZ ---
+# --- INTERFAZ STREAMLIT ---
 st.set_page_config(page_title="Comparador", layout="wide")
-st.title("⚡ Extractor Potencia + Energía")
+st.title("⚡ Extractor Potencia + Energía (Energía XXI)")
 
-uploaded_files = st.file_uploader("Sube tus PDFs de Energía XXI", type="pdf", accept_multiple_files=True)
+uploaded_files = st.file_uploader("Sube tus PDFs", type="pdf", accept_multiple_files=True)
 
 if uploaded_files:
     datos_lista = []
@@ -90,29 +80,32 @@ if uploaded_files:
         st.write("### Datos extraídos (Total Real = Potencia + Energía)")
         st.dataframe(df, use_container_width=True)
 
+        # Cargar tarifas y comparar
         if os.path.exists("tarifas_companias.xlsx"):
             df_tarifas = pd.read_excel("tarifas_companias.xlsx")
-            resultados_comp = []
+            res_comp = []
             
             for _, fact in df.iterrows():
-                # Añadir la fila de la factura actual
-                resultados_comp.append({
-                    "Fecha": fact['Fecha'], "Tarifa": "📍 ACTUAL (P+E)", 
+                # Fila de la factura actual del usuario
+                res_comp.append({
+                    "Fecha": fact['Fecha'], "Tarifa": "📍 TU FACTURA (Pot+Ene)", 
                     "Coste (€)": fact['Total Real'], "Ahorro": 0.0
                 })
                 
-                # Calcular contra el Excel
+                # Comparar con las del Excel
                 for _, t in df_tarifas.iterrows():
+                    # Cálculo: (Días * Pot_P1 * kW) + (Días * Pot_P2 * kW) + (kWh_P1 * Precio_P1) + ...
                     coste = (fact['Días'] * t.iloc[1] * fact['Potencia (kW)']) + \
                             (fact['Días'] * t.iloc[2] * fact['Potencia (kW)']) + \
                             (fact['Consumo Punta (kWh)'] * t.iloc[3]) + \
                             (fact['Consumo Llano (kWh)'] * t.iloc[4]) + \
                             (fact['Consumo Valle (kWh)'] * t.iloc[5])
                     
-                    resultados_comp.append({
+                    res_comp.append({
                         "Fecha": fact['Fecha'], "Tarifa": t.iloc[0], 
                         "Coste (€)": round(coste, 2), "Ahorro": round(fact['Total Real'] - coste, 2)
                     })
             
-            st.subheader("📊 Comparativa")
-            st.dataframe(pd.DataFrame(resultados_comp).sort_values("Ahorro", ascending=False), use_container_width=True)
+            st.subheader("📊 Comparativa de Ahorro")
+            df_final = pd.DataFrame(res_comp).sort_values(by=["Fecha", "Ahorro"], ascending=[True, False])
+            st.dataframe(df_final, use_container_width=True, hide_index=True)
