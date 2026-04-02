@@ -223,28 +223,29 @@ def extraer_datos_factura(pdf_path):
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        # --- CORRECCIÓN FECHA ENERGÍA XXI ---
         patron_fecha = r'Fecha\s+de\s+cargo:\s*([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
         
-        match_dias = re.search(r'(\d+)\s*días', texto_completo)
+        match_dias = re.search(r'\((\d+)\s*días\)', texto_completo)
+        if not match_dias: match_dias = re.search(r'(\d+)\s*días', texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
         
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        # --- CORRECCIÓN TOTAL REAL ENERGÍA XXI ---
-        # Buscamos los valores ignorando posibles comillas, comas o saltos de línea de la tabla
-        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada.*?([\d]+,[\d]{2})\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
-        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida.*?([\d]+,[\d]{2})\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
+        # EXTRACCIÓN MEJORADA PARA RESUMEN ENERGÍA XXI (Potencia + Energía)
+        # Se usa re.DOTALL y flexibilidad total para saltar comillas y comas del formato de tabla
+        p_pot = r'potencia\s+contratada.*?"?\s*,?\s*"?([\d,]+)\s*€'
+        p_ene = r'energía\s+consumida.*?"?\s*,?\s*"?([\d,]+)\s*€'
         
-        if m_val_pot_xxi and m_val_ene_xxi:
-            v1 = float(m_val_pot_xxi.group(1).replace(',', '.'))
-            v2 = float(m_val_ene_xxi.group(1).replace(',', '.'))
-            total_real = v1 + v2
+        m_pot = re.search(p_pot, texto_completo, re.IGNORECASE | re.DOTALL)
+        m_ene = re.search(p_ene, texto_completo, re.IGNORECASE | re.DOTALL)
+        
+        if m_pot and m_ene:
+            total_real = float(m_pot.group(1).replace(',', '.')) + float(m_ene.group(1).replace(',', '.'))
         else:
-            match_total = re.search(r'Total\s+electricidad\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            match_total = re.search(r'TOTAL\s+IMPORTE\s+FACTURA.*?"?\s*,?\s*"?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
             total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
     return {
@@ -254,7 +255,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# --- Código Streamlit (Sin cambios) ---
+# --- Código Streamlit ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
