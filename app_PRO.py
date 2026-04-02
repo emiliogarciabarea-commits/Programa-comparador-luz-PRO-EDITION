@@ -227,22 +227,20 @@ def extraer_datos_factura(pdf_path):
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
         
-        # Corrección Días Energía XXI
-        match_dias = re.search(r'(\d+)\s*días', texto_completo, re.IGNORECASE)
+        match_dias = re.search(r'(\d+)\s*días', texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
         
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        # Corrección Suma Total Energía XXI (Soportando comillas y saltos de línea de la tabla)
-        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s*"?\s*,\s*"?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s*"?\s*,\s*"?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        # Suma de Potencia + Energía consumida con flexibilidad de saltos de línea
+        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s*[\n\r]*\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s*[\n\r]*\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
         if m_val_pot_xxi and m_val_ene_xxi:
             total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
         else:
-            # Si falla el desglose, buscamos el Total de la factura directamente
-            match_total = re.search(r'IMPORTE\s+FACTURA:\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            match_total = re.search(r'Total\s+electricidad\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
             total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
     return {
@@ -364,3 +362,4 @@ else:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
+
