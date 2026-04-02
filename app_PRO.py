@@ -224,7 +224,7 @@ def extraer_datos_factura(pdf_path):
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
         # --- CORRECCIÓN FECHA ENERGÍA XXI ---
-        patron_fecha = r'Fecha\s+de\s+cargo:?\s*([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
+        patron_fecha = r'Fecha\s+de\s+cargo:\s*(.*)'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
         
