@@ -204,18 +204,18 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0
 
     else:
-        # --- BLOQUE ENERGÍA XXI - VERSIÓN FINAL BLINDADA ---
+        # --- BLOQUE ENERGÍA XXI - VERSIÓN FINAL ULTRA-ROBUSTA ---
         if es_xxi: compania = "Energía XXI"
         
-        # 1. Fecha de cargo (Busca "Fecha de cargo:" seguido de la fecha)
-        m_fecha = re.search(r'Fecha\s+de\s+cargo:\s*(\d{1,2}.*?\d{4})', texto_completo, re.IGNORECASE)
+        # FECHA DE CARGO: Capturamos todo hasta el final de la línea tras "Fecha de cargo"
+        m_fecha = re.search(r'Fecha\s+de\s+cargo[:\s]+(.*?)(?:\n|\r|$)', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1).strip() if m_fecha else "No encontrada"
         
-        # 2. Potencia contratada (kW)
+        # POTENCIA (kW): Localizamos el valor kW numérico
         m_pot_kw = re.search(r'Potencia\s+contratada.*?([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
         potencia = float(m_pot_kw.group(1).replace(',', '.')) if m_pot_kw else 0.0
         
-        # 3. Consumos kWh (P1, P2, P3)
+        # CONSUMOS kWh (P1, P2, P3)
         consumos = {'punta': 0.0, 'llano': 0.0, 'valle': 0.0}
         m_p1 = re.search(r'Consumo\s+en\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         m_p2 = re.search(r'Consumo\s+en\s+P2:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
@@ -224,17 +224,17 @@ def extraer_datos_factura(pdf_path):
         if m_p2: consumos['llano'] = float(m_p2.group(1).replace(',', '.'))
         if m_p3: consumos['valle'] = float(m_p3.group(1).replace(',', '.'))
 
-        # 4. TOTAL REAL (Suma Término Potencia + Término Energía)
-        # Buscamos en el resumen los importes en euros
-        m_pot_eur = re.search(r'Por\s+potencia\s+contratada\s+([\d,.]+)', texto_completo, re.IGNORECASE)
-        m_ene_eur = re.search(r'Por\s+energ[íi]a\s+consumida\s+([\d,.]+)', texto_completo, re.IGNORECASE)
+        # TOTAL REAL (Suma Término Potencia + Término Energía)
+        # Regex blindado que busca el texto y el siguiente número sin importar separadores
+        m_p_eur = re.search(r'potencia\s+contratada[^\d,]*(\d+[\d,.]*)', texto_completo, re.IGNORECASE)
+        m_e_eur = re.search(r'energ[íi]a\s+consumida[^\d,]*(\d+[\d,.]*)', texto_completo, re.IGNORECASE)
         
-        if m_pot_eur and m_ene_eur:
-            total_real = float(m_pot_eur.group(1).replace(',', '.')) + float(m_ene_eur.group(1).replace(',', '.'))
+        if m_p_eur and m_e_eur:
+            total_real = float(m_p_eur.group(1).replace(',', '.')) + float(m_e_eur.group(1).replace(',', '.'))
         else:
-            # Fallback al total bruto si las líneas específicas fallan
-            m_bruto = re.search(r'TOTAL\s+IMPORTE\s+FACTURA\s+([\d,.]+)', texto_completo, re.IGNORECASE)
-            total_real = float(m_bruto.group(1).replace(',', '.')) if m_bruto else 0.0
+            # Fallback al total bruto de la factura
+            m_t_bruto = re.search(r'TOTAL\s+IMPORTE\s+FACTURA[^\d,]*(\d+[\d,.]*)', texto_completo, re.IGNORECASE)
+            total_real = float(m_t_bruto.group(1).replace(',', '.')) if m_t_bruto else 0.0
 
         m_dias = re.search(r'(\d+)\s*días', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
