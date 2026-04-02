@@ -223,7 +223,8 @@ def extraer_datos_factura(pdf_path):
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        patron_fecha = r'Fecha\s+de\s+cargo:\s*([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
+        # --- CORRECCIÓN FECHA ENERGÍA XXI ---
+        patron_fecha = r'Fecha\s+de\s+cargo:?\s*([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
         
@@ -233,9 +234,10 @@ def extraer_datos_factura(pdf_path):
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        # Suma de Potencia + Energía consumida con flexibilidad de saltos de línea
-        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s*[\n\r]*\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s*[\n\r]*\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        # --- CORRECCIÓN TOTAL REAL ENERGÍA XXI (Potencia + Energía) ---
+        # El extractor mete comillas y saltos de línea, usamos [\s"',]* para limpiar
+        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada[\s"',]*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida[\s"',]*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
         if m_val_pot_xxi and m_val_ene_xxi:
             total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
@@ -362,4 +364,3 @@ else:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
-
