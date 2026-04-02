@@ -127,7 +127,6 @@ def extraer_datos_factura(pdf_path):
         m_exc = re.search(r'Valoración\s+excedentes\s*(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(m_exc.group(1).replace(',', '.'))) if m_exc else 0.0
         
-        # --- Modificación solicitada para Naturgy ---
         m_subtotal = re.search(r'Subtotal\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         if m_subtotal:
             total_real = float(m_subtotal.group(1).replace(',', '.'))
@@ -204,12 +203,11 @@ def extraer_datos_factura(pdf_path):
         total_real = (float(m_imp_potencia.group(1).replace(',', '.')) if m_imp_potencia else 0.0) + (float(m_imp_energia.group(1).replace(',', '.')) if m_imp_energia else 0.0)
         excedente = 0.0
 
-   else:
+    else:
         if es_xxi: 
             compania = "Energía XXI"
             
-            # --- MEJORA EN CONSUMOS ---
-            # Buscamos tanto el formato de frase como el formato de tabla P1/P2/P3
+            # --- MEJORA ESPECÍFICA ENERGÍA XXI ---
             patrones_consumo = {
                 'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'P1\s*\(punta\).*?([\d,.]+)\s*kWh'],
                 'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'P2\s*\(llano\).*?([\d,.]+)\s*kWh'],
@@ -221,51 +219,40 @@ def extraer_datos_factura(pdf_path):
                 for patron in patrones:
                     match = re.search(patron, texto_completo, re.IGNORECASE | re.DOTALL)
                     if match:
-                        # Limpiamos posibles ruidos y convertimos
-                        valor = match.group(1).replace(',', '.')
-                        consumos[tramo] = float(valor)
+                        consumos[tramo] = float(match.group(1).replace(',', '.'))
                         break
-
-            # --- MEJORA EN POTENCIA ---
-            # Ajustado para saltar posibles comillas o ruidos de tabla
+            
             patron_potencia = r'Potencia\s+contratada\s+en\s+punta-llano:?\s*"?\s*([\d,.]+)\s*kW'
             match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
             potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
-
-            # --- MEJORA EN FECHA ---
+            
             patron_fecha = r'(?:emitida\s+el|Fecha\s+de\s+emisión:)\s*([\d/]+\s*(?:de\s+\w+\s+de\s+)?\d{2,4})'
             match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
             fecha = match_fecha.group(1) if match_fecha else "No encontrada"
-
-            # --- MEJORA EN DÍAS ---
-            # Buscamos el número que está dentro del paréntesis al lado de las fechas
+            
+            # Captura días en formato (28 días)
             match_dias = re.search(r'\((\d+)\s*días\)', texto_completo)
             dias = int(match_dias.group(1)) if match_dias else 0
-
-            # --- MEJORA EN EXCEDENTES ---
+            
             match_excedente = re.search(r'Valoración\s+excedentes.*?(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
             excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
             
-            # --- MEJORA EN TOTAL REAL (Crucial para Energía XXI) ---
-            # Buscamos en el resumen de la primera página. 
-            # El formato suele ser "Por potencia contratada","8,13 €"
+            # Manejo de comillas y comas en tablas de resumen para Importe Real
             m_val_pot = re.search(r'Por\s+potencia\s+contratada\s*"?\s*,\s*"?\s*([\d,.]+)\s*€', texto_completo)
             m_val_ene = re.search(r'Por\s+energía\s+consumida\s*"?\s*,\s*"?\s*([\d,.]+)\s*€', texto_completo)
-            
             if m_val_pot and m_val_ene:
                 total_real = float(m_val_pot.group(1).replace(',', '.')) + float(m_val_ene.group(1).replace(',', '.'))
             else:
-                # Si falla el desglose, buscamos el total importe factura
                 match_total = re.search(r'TOTAL\s+IMPORTE\s+FACTURA\s*"?\s*,\s*"?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
                 total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
-        
-        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s+.*?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s+.*?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        if m_val_pot_xxi and m_val_ene_xxi:
-            total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
         else:
-            match_total = re.search(r'Total\s+electricidad\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-            total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
+            # Caso genérico si no es ninguna conocida
+            consumos = {'punta': 0.0, 'llano': 0.0, 'valle': 0.0}
+            potencia = 0.0
+            fecha = "No encontrada"
+            dias = 0
+            total_real = 0.0
+            excedente = 0.0
 
     return {
         "Compañía": compania, "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
@@ -356,7 +343,6 @@ else:
                 with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
                 with c2: st.metric(label="Ahorro Total Acumulado", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €")
 
-            # --- PARTE AÑADIDA: VISUALIZACIÓN IGUAL A LA FOTO ---
             st.subheader("📊 Comparativa Detallada por Factura")
             
             df_mostrar = df_comp.drop(columns=['Dias_Factura'], errors='ignore')
