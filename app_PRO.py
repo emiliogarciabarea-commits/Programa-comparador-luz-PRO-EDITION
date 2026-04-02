@@ -222,7 +222,7 @@ def extraer_datos_factura(pdf_path):
         match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        # --- Búsqueda de fecha flexibilizada para Energía XXI ---
+        # --- BUSQUEDA DE FECHA FLEXIBLE (AÑADIDA OPCIÓN FECHA DE CARGO) ---
         patron_fecha = r'(?:emitida\s+el|Fecha\s+de\s+emisión:|Fecha\s+de\s+cargo:)\s*([\d/]+\s*(?:de\s+\w+\s+de\s+)?\d{2,4})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
@@ -247,7 +247,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# --- Código Streamlit (Sin cambios) ---
+# --- Código Streamlit (Resto del código sin cambios) ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
