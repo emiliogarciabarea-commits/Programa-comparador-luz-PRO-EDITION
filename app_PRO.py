@@ -223,8 +223,8 @@ def extraer_datos_factura(pdf_path):
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        # --- CORRECCIÓN FECHA ENERGÍA XXI (Captura fecha de emisión real) ---
-        patron_fecha = r'emitida\s+el\s+([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
+        # --- CORRECCIÓN FECHA ENERGÍA XXI ---
+        patron_fecha = r'Fecha\s+de\s+cargo:?\s*([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
         
@@ -234,14 +234,15 @@ def extraer_datos_factura(pdf_path):
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        # --- CORRECCIÓN TOTAL REAL ENERGÍA XXI (Potencia + Energía con limpieza de comillas/ruido) ---
+        # --- CORRECCIÓN TOTAL REAL ENERGÍA XXI (Potencia + Energía) ---
+        # Se ha mejorado el regex para capturar valores aunque tengan comillas o saltos de línea (como en el PDF actual)
         m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
         m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
         
         if m_val_pot_xxi and m_val_ene_xxi:
             total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
         else:
-            match_total = re.search(r'Total\s+electricidad\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            match_total = re.search(r'IMPORTE\s+FACTURA:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
             total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
     return {
