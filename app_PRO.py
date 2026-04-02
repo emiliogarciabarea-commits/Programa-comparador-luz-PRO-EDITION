@@ -206,10 +206,9 @@ def extraer_datos_factura(pdf_path):
     else:
         if es_xxi: compania = "Energía XXI"
         
-        # --- BÚSQUEDA DE LA PRIMERA FECHA DEL DOCUMENTO ---
-        # Busca formatos: 14 de marzo de 2026 o 14/03/2026
-        todas_las_fechas = re.findall(r'\d{1,2}\s+de\s+\w+\s+de\s+\d{4}|\d{2}/\d{2}/\d{2,4}', texto_completo)
-        fecha = todas_las_fechas[0] if todas_las_fechas else "No encontrada"
+        # --- BÚSQUEDA DE FECHA: Lectura actual (real) (14 de marzo de 2026) ---
+        m_fecha = re.search(r'Lectura\s+actual\s+\(real\)\s*\((.*?)\)', texto_completo, re.IGNORECASE)
+        fecha = m_fecha.group(1).strip() if m_fecha else "No encontrada"
 
         # --- TOTAL REAL: Valor en euros de la fila "Facturación por potencia contratada" ---
         m_total_potencia = re.search(r'Facturaci[oó]n\s+por\s+potencia\s+contratada.*?([\d,.]+)', texto_completo, re.IGNORECASE)
