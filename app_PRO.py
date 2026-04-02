@@ -223,8 +223,7 @@ def extraer_datos_factura(pdf_path):
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        # --- CAMBIO SOLICITADO AQUÍ ---
-        patron_fecha = r'emitida\s+el\s+([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
+        patron_fecha = r'Fecha\s+de\s+cargo:\s*([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
         
@@ -251,7 +250,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# --- Resto del código Streamlit (sin cambios) ---
+# --- Código Streamlit ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
