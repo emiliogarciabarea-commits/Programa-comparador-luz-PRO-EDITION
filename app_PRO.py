@@ -204,14 +204,22 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0
 
     else:
-        # --- BLOQUE ENERGÍA XXI ULTRA ROBUSTO ---
+        # --- SECCIÓN ROBUSTA PARA ENERGÍA XXI ---
         if es_xxi: compania = "Energía XXI"
         
-        # 1. Consumos P1, P2, P3
+        # Búsqueda de Fecha de Cargo: captura todo después del label hasta fin de línea
+        m_fecha = re.search(r'Fecha\s+de\s+cargo[:\s]+([^\n\r]+)', texto_completo, re.IGNORECASE)
+        fecha = m_fecha.group(1).strip() if m_fecha else "No encontrada"
+        
+        # Búsqueda de Potencia (kW) en el cuerpo del contrato
+        m_pot_kw = re.search(r'Potencia\s+contratada.*?([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
+        potencia = float(m_pot_kw.group(1).replace(',', '.')) if m_pot_kw else 0.0
+        
+        # Búsqueda de Consumos (kWh)
         patrones_consumo = {
-            'punta': [r'P1:?\s*([\d,.]+)\s*kWh', r'Punta\s*([\d,.]+)\s*kWh'],
-            'llano': [r'P2:?\s*([\d,.]+)\s*kWh', r'Llano\s*([\d,.]+)\s*kWh'],
-            'valle': [r'P3:?\s*([\d,.]+)\s*kWh', r'Valle\s*([\d,.]+)\s*kWh']
+            'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)', r'P1:?\s*([\d,.]+)\s*kWh'],
+            'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)', r'P2:?\s*([\d,.]+)\s*kWh'],
+            'valle': [r'Consumo\s+en\s+P3:?\s*([\d,.]+)', r'P3:?\s*([\d,.]+)\s*kWh']
         }
         consumos = {}
         for tramo, patrones in patrones_consumo.items():
@@ -221,34 +229,22 @@ def extraer_datos_factura(pdf_path):
                 if match:
                     consumos[tramo] = float(match.group(1).replace(',', '.'))
                     break
+
+        # TOTAL REAL (Suma Término Potencia + Término Energía)
+        # Buscamos específicamente en la sección de RESUMEN DE LA FACTURA
+        m_p_euro = re.search(r'potencia\s+contratada[^\d\n]*(\d+[\d,.]*)', texto_completo, re.IGNORECASE)
+        m_e_euro = re.search(r'energ[íi]a\s+consumida[^\d\n]*(\d+[\d,.]*)', texto_completo, re.IGNORECASE)
         
-        # 2. Potencia (kW)
-        match_pot_kw = re.search(r'([\d,.]+)\s*kW', texto_completo)
-        potencia = float(match_pot_kw.group(1).replace(',', '.')) if match_pot_kw else 0.0
-        
-        # 3. Fecha de cargo (Captura flexible de la fecha completa en español)
-        m_fecha = re.search(r'Fecha\s+de\s+cargo:\s*(\d{1,2}\s+de\s+\w+\s+de\s+\d{4})', texto_completo, re.IGNORECASE)
-        fecha = m_fecha.group(1) if m_fecha else "No encontrada"
-        
-        # 4. Días
+        if m_p_euro and m_e_euro:
+            total_real = float(m_p_euro.group(1).replace(',', '.')) + float(m_e_euro.group(1).replace(',', '.'))
+        else:
+            total_real = 0.0
+
         m_dias = re.search(r'(\d+)\s*días', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
         
-        # 5. Excedente
         m_exc = re.search(r'Valoración\s+excedentes.*?(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
         excedente = abs(float(m_exc.group(1).replace(',', '.'))) if m_exc else 0.0
-        
-        # 6. Total Real (Suma Potencia + Energía)
-        # Buscamos las líneas de base imponible del resumen de factura
-        m_p = re.search(r'Por\s+potencia\s+contratada.*?(\d+,\d{2})', texto_completo, re.IGNORECASE)
-        m_e = re.search(r'Por\s+energ[íi]a\s+consumida.*?(\d+,\d{2})', texto_completo, re.IGNORECASE)
-        
-        if m_p and m_e:
-            total_real = float(m_p.group(1).replace(',', '.')) + float(m_e.group(1).replace(',', '.'))
-        else:
-            # Fallback al total bruto de la factura si no se encuentran los sumandos
-            m_t = re.search(r'TOTAL\s+IMPORTE\s+FACTURA.*?(\d+,\d{2})', texto_completo, re.IGNORECASE)
-            total_real = float(m_t.group(1).replace(',', '.')) if m_t else 0.0
 
     return {
         "Compañía": compania, "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
@@ -257,7 +253,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# --- Código Streamlit (Sin cambios) ---
+# --- Código Streamlit ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
