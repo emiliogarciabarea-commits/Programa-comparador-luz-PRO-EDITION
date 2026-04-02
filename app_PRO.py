@@ -222,12 +222,16 @@ def extraer_datos_factura(pdf_path):
         match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        # --- LECTURA DE FECHA ROBUSTA ---
-        # Busca tras "emitida el" o "Fecha de emisión", aceptando formato numérico o con mes escrito
-        patron_fecha = r'(?:emitida\s+el|Fecha\s+de\s+emisión:?)\s*([\d/]+\s*(?:de\s+\w+\s+de\s+)?\d{2,4})'
-        match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
-        fecha = match_fecha.group(1) if match_fecha else "No encontrada"
-        
+        # --- Lectura de fecha mejorada para Energía XXI ---
+        patron_fecha_xxi = r'emitida\s+el\s+([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
+        match_fecha = re.search(patron_fecha_xxi, texto_completo, re.IGNORECASE)
+        if match_fecha:
+            fecha = match_fecha.group(1)
+        else:
+            # Plan B: buscar formato numérico estándar si falla el de texto
+            match_fecha_alt = re.search(r'Fecha\s+de\s+emisión:\s*([\d/]{10})', texto_completo, re.IGNORECASE)
+            fecha = match_fecha_alt.group(1) if match_fecha_alt else "No encontrada"
+
         match_dias = re.search(r'(\d+)\s*días', texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
@@ -242,7 +246,7 @@ def extraer_datos_factura(pdf_path):
             total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
     else:
-        # Lógica genérica para cualquier otra factura que no sea detectada arriba
+        # Lógica genérica
         consumos = {'punta': 0.0, 'llano': 0.0, 'valle': 0.0}
         potencia = 0.0
         fecha = "No encontrada"
