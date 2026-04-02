@@ -127,6 +127,7 @@ def extraer_datos_factura(pdf_path):
         m_exc = re.search(r'Valoración\s+excedentes\s*(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(m_exc.group(1).replace(',', '.'))) if m_exc else 0.0
         
+        # --- Modificación solicitada para Naturgy ---
         m_subtotal = re.search(r'Subtotal\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         if m_subtotal:
             total_real = float(m_subtotal.group(1).replace(',', '.'))
@@ -205,12 +206,10 @@ def extraer_datos_factura(pdf_path):
 
     else:
         if es_xxi: compania = "Energía XXI"
-        
-        # --- Mejoras de flexibilidad para Consumos P1, P2, P3 ---
         patrones_consumo = {
-            'punta': [r'P1:?\s*([\d,.]+)\s*kWh', r'Punta\s*([\d,.]+)\s*kWh'],
-            'llano': [r'P2:?\s*([\d,.]+)\s*kWh', r'Llano\s*([\d,.]+)\s*kWh'],
-            'valle': [r'P3:?\s*([\d,.]+)\s*kWh', r'Valle\s*([\d,.]+)\s*kWh']
+            'punta': [r'P1:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh'],
+            'llano': [r'P2:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh'],
+            'valle': [r'P3:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh']
         }
         consumos = {}
         for tramo, patrones in patrones_consumo.items():
@@ -221,23 +220,22 @@ def extraer_datos_factura(pdf_path):
                     consumos[tramo] = float(match.group(1).replace(',', '.'))
                     break
         
-        # --- Mejoras de flexibilidad para Potencia kW ---
-        patron_potencia = r'(?:Potencia\s+contratada.*?|P1.*?|punta-llano.*?)\s*([\d,.]+)\s*kW'
+        patron_potencia = r'([\d,.]+)\s*kW'
         match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        # --- Mejoras de flexibilidad para Fecha de cargo ---
-        patron_fecha = r'(?:Fecha\s+de\s+cargo:|emitida\s+el)\s*([\d]{1,2}\s+de\s+\w+\s+de\s+\d{2,4}|[\d/]{8,10})'
+        patron_fecha = r'Fecha\s+de\s+cargo:\s*(\d{2}\s+de\s+\w+\s+de\s+\d{4})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
         
         match_dias = re.search(r'(\d+)\s*días', texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
+        
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s+.*?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s+.*?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s+([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         if m_val_pot_xxi and m_val_ene_xxi:
             total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
         else:
@@ -251,7 +249,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# --- Código Streamlit (Sin cambios) ---
+# --- Código Streamlit ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
@@ -333,6 +331,7 @@ else:
                 with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
                 with c2: st.metric(label="Ahorro Total Acumulado", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €")
 
+            # --- VISUALIZACIÓN ---
             st.subheader("📊 Comparativa Detallada por Factura")
             
             df_mostrar = df_comp.drop(columns=['Dias_Factura'], errors='ignore')
