@@ -222,14 +222,11 @@ def extraer_datos_factura(pdf_path):
         match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        # --- Lectura de fecha más flexible para Energía XXI ---
-        m_fecha_emitida = re.search(r'emitida\s+el\s*([\d/]{10})', texto_completo, re.IGNORECASE)
-        if m_fecha_emitida:
-            fecha = m_fecha_emitida.group(1)
-        else:
-            # Plan B: buscar cualquier fecha con formato DD/MM/AAAA en el texto
-            m_fecha_gen = re.search(r'(\d{2}/\d{2}/\d{4})', texto_completo)
-            fecha = m_fecha_gen.group(1) if m_fecha_gen else "No encontrada"
+        # --- LECTURA DE FECHA ROBUSTA ---
+        # Busca tras "emitida el" o "Fecha de emisión", aceptando formato numérico o con mes escrito
+        patron_fecha = r'(?:emitida\s+el|Fecha\s+de\s+emisión:?)\s*([\d/]+\s*(?:de\s+\w+\s+de\s+)?\d{2,4})'
+        match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
+        fecha = match_fecha.group(1) if match_fecha else "No encontrada"
         
         match_dias = re.search(r'(\d+)\s*días', texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
