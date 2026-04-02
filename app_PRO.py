@@ -203,28 +203,6 @@ def extraer_datos_factura(pdf_path):
         total_real = (float(m_imp_potencia.group(1).replace(',', '.')) if m_imp_potencia else 0.0) + (float(m_imp_energia.group(1).replace(',', '.')) if m_imp_energia else 0.0)
         excedente = 0.0
 
-    elif es_xxi:
-        compania = "Energía XXI"
-        # Búsqueda de fecha de emisión
-        m_fecha_xxi = re.search(r'emitida\s+el\s+([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})', texto_completo, re.IGNORECASE)
-        fecha = m_fecha_xxi.group(1) if m_fecha_xxi else "No encontrada"
-        
-        # Cálculo de Total Real (Suma de Potencia + Energía Consumida)
-        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s*[\n\r]*\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s*[\n\r]*\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        
-        if m_val_pot_xxi and m_val_ene_xxi:
-            total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
-        else:
-            total_real = 0.0
-
-        # El resto de campos se inicializan vacíos o por defecto para ser llenados por el else genérico si fuera necesario
-        # pero aquí los definimos para que la función no falle
-        consumos = {'punta': 0.0, 'llano': 0.0, 'valle': 0.0}
-        potencia = 0.0
-        dias = 0
-        excedente = 0.0
-
     else:
         if es_xxi: compania = "Energía XXI"
         patrones_consumo = {
@@ -245,7 +223,8 @@ def extraer_datos_factura(pdf_path):
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        patron_fecha = r'Fecha\s+de\s+cargo:\s*([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
+        # --- CAMBIO SOLICITADO AQUÍ ---
+        patron_fecha = r'emitida\s+el\s+([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
         
@@ -272,7 +251,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# --- Código Streamlit ---
+# --- Resto del código Streamlit (sin cambios) ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
