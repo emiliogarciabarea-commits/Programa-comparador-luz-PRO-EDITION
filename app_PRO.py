@@ -206,46 +206,43 @@ def extraer_datos_factura(pdf_path):
     else:
         if es_xxi: compania = "Energía XXI"
         patrones_consumo = {
-            'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'P1:?\s*([\d,.]+)\s*kWh', r'Punta\s*([\d,.]+)\s*kWh'],
-            'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'P2:?\s*([\d,.]+)\s*kWh', r'Llano\s*([\d,.]+)\s*kWh'],
-            'valle': [r'Consumo\s+en\s+P3:?\s*([\d,.]+)\s*kWh', r'P3:?\s*([\d,.]+)\s*kWh', r'Valle\s*([\d,.]+)\s*kWh']
+            'punta': [r'P1:?\s*([\d,.]+)\s*kWh', r'Punta\s*.*?([\d,.]+)\s*kWh'],
+            'llano': [r'P2:?\s*([\d,.]+)\s*kWh', r'Llano\s*.*?([\d,.]+)\s*kWh'],
+            'valle': [r'P3:?\s*([\d,.]+)\s*kWh', r'Valle\s*.*?([\d,.]+)\s*kWh']
         }
         consumos = {}
         for tramo, patrones in patrones_consumo.items():
             consumos[tramo] = 0.0
             for patron in patrones:
-                match = re.search(patron, texto_completo, re.IGNORECASE)
+                match = re.search(patron, texto_completo, re.IGNORECASE | re.DOTALL)
                 if match:
                     consumos[tramo] = float(match.group(1).replace(',', '.'))
                     break
         
-        patron_potencia = r'Potencia\s+contratada.*?\s*([\d,.]+)\s*kW'
-        match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
+        patron_potencia = r'([\d,.]+)\s*kW'
+        match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        # Corrección: Búsqueda flexible de fecha de emisión
-        patron_fecha = r'emitida\s+el\s+([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
+        # Fecha de emisión para Energía XXI
+        patron_fecha = r'emitida\s+el\s+([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4}|[\d/]{8,10})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
         
-        match_dias = re.search(r'(\d+)\s*días', texto_completo, re.IGNORECASE)
+        match_dias = re.search(r'(\d+)\s*días', texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
         
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        # Corrección: Obtener el Total Factura directamente de la cabecera (más fiable)
-        match_total_cabecera = re.search(r'IMPORTE\s+FACTURA:\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        if match_total_cabecera:
-            total_real = float(match_total_cabecera.group(1).replace(',', '.'))
+        # Lectura flexible de Potencia + Energía para Total Real
+        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s*[\"\'\s,]*\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s*[\"\'\s,]*\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        
+        if m_val_pot_xxi and m_val_ene_xxi:
+            total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
         else:
-            # Fallback a la suma de términos si no encuentra el total global
-            m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s*[\n\r]*\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-            m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s*[\n\r]*\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-            if m_val_pot_xxi and m_val_ene_xxi:
-                total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
-            else:
-                total_real = 0.0
+            match_total = re.search(r'Total\s+electricidad\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
     return {
         "Compañía": compania, "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
@@ -254,7 +251,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# --- Código Streamlit (Sigue igual para mantener funcionalidad) ---
+# --- Código Streamlit ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
