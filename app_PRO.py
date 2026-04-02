@@ -223,7 +223,7 @@ def extraer_datos_factura(pdf_path):
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        # --- CORRECCIÓN FECHA DE CARGO ---
+        # --- CORRECCIÓN FECHA ENERGÍA XXI ---
         patron_fecha = r'Fecha\s+de\s+cargo:\s*([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
@@ -234,15 +234,16 @@ def extraer_datos_factura(pdf_path):
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        # --- CORRECCIÓN TOTAL REAL (POTENCIA + ENERGÍA) ---
-        # Buscamos el texto y permitimos cualquier carácter no numérico intermedio (comas, comillas, espacios) hasta llegar al valor
-        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada[^\d]*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida[^\d]*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        # --- CORRECCIÓN TOTAL REAL ENERGÍA XXI ---
+        # Buscamos los valores ignorando posibles comillas, comas o saltos de línea de la tabla
+        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada.*?([\d]+,[\d]{2})\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
+        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida.*?([\d]+,[\d]{2})\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
         
         if m_val_pot_xxi and m_val_ene_xxi:
-            total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
+            v1 = float(m_val_pot_xxi.group(1).replace(',', '.'))
+            v2 = float(m_val_ene_xxi.group(1).replace(',', '.'))
+            total_real = v1 + v2
         else:
-            # Fallback a Total electricidad si el desglose falla
             match_total = re.search(r'Total\s+electricidad\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
             total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
