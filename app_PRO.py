@@ -206,8 +206,6 @@ def extraer_datos_factura(pdf_path):
     else:
         # --- SECCIÓN ROBUSTA PARA ENERGÍA XXI ---
         if es_xxi: compania = "Energía XXI"
-        
-        # 1. Búsqueda de Consumos (P1, P2, P3)
         patrones_consumo = {
             'punta': [r'P1:?\s*([\d,.]+)\s*kWh', r'Punta\s*([\d,.]+)\s*kWh'],
             'llano': [r'P2:?\s*([\d,.]+)\s*kWh', r'Llano\s*([\d,.]+)\s*kWh'],
@@ -222,36 +220,30 @@ def extraer_datos_factura(pdf_path):
                     consumos[tramo] = float(match.group(1).replace(',', '.'))
                     break
         
-        # 2. Potencia Contratada (kW)
         patron_potencia = r'([\d,.]+)\s*kW'
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        # 3. FECHA DE CARGO (MÉTODO ROBUSTO)
-        # Busca "Fecha de cargo:" y captura todo hasta el final de la línea
-        m_fecha_cargo = re.search(r'Fecha\s+de\s+cargo:\s*([^\n\r]+)', texto_completo, re.IGNORECASE)
-        fecha = m_fecha_cargo.group(1).strip() if m_fecha_cargo else "No encontrada"
+        # Lectura de fecha de cargo (captura la línea completa tras el label)
+        patron_fecha = r'Fecha\s+de\s+cargo:\s*([^\n\r]+)'
+        match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
+        fecha = match_fecha.group(1).strip() if match_fecha else "No encontrada"
         
-        # 4. Días de consumo
         match_dias = re.search(r'(\d+)\s*días', texto_completo, re.IGNORECASE)
         dias = int(match_dias.group(1)) if match_dias else 0
         
-        # 5. Excedentes
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        # 6. TOTAL REAL (SUMA POTENCIA + ENERGÍA)
-        # Buscamos los términos numéricos que siguen a las etiquetas exactas del resumen
-        m_val_pot = re.search(r'Por\s+potencia\s+contratada\s+([\d,.]+)', texto_completo, re.IGNORECASE)
-        m_val_ene = re.search(r'Por\s+energ[íi]a\s+consumida\s+([\d,.]+)', texto_completo, re.IGNORECASE)
+        # Suma de Potencia + Energía (Utiliza [^\d]* para saltar puntos de relleno)
+        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada[^\d]*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_val_ene_xxi = re.search(r'Por\s+energ[íi]a\s+consumida[^\d]*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
-        if m_val_pot and m_val_ene:
-            v_pot = float(m_val_pot.group(1).replace(',', '.'))
-            v_ene = float(m_val_ene.group(1).replace(',', '.'))
-            total_real = v_pot + v_ene
+        if m_val_pot_xxi and m_val_ene_xxi:
+            total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
         else:
-            # Fallback en caso de que las etiquetas cambien ligeramente
-            match_total = re.search(r'Total\s+electricidad\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            # Fallback corregido al texto real de la factura
+            match_total = re.search(r'TOTAL\s+IMPORTE\s+FACTURA\s*([\d,.]+)', texto_completo, re.IGNORECASE)
             total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
     return {
