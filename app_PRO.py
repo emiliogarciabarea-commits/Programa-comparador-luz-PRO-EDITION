@@ -244,8 +244,9 @@ def extraer_datos_factura(pdf_path):
             v_ene = float(m_val_ene_xxi.group(1).replace(',', '.'))
             total_real = v_pot + v_ene
         else:
-            match_total = re.search(r'Total\s+electricidad\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-            total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
+            match_total = re.search(r'TOTAL\s+IMPORTE\s+FACTURA\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            if match_total:
+                total_real = float(match_total.group(1).replace(',', '.'))
 
     return {
         "Compañía": compania, "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
