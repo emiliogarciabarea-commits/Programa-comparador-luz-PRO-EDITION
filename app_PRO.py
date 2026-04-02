@@ -21,12 +21,13 @@ def extraer_datos_factura(pdf_path):
     es_xxi = re.search(r'Energía\s+XXI', texto_completo, re.IGNORECASE)
     es_octopus = re.search(r'octopus\s+energy', texto_completo, re.IGNORECASE)
 
-    compania = "Genérica / Desconocida"
+    compania = "Genérica / Desconocida" # Valor por defecto
 
     if es_el_corte_ingles:
         compania = "El Corte Inglés"
         patron_cons_eci = r'Punta\s+Llano\s+Valle\s+Consumo\s+kWh\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)'
         match_cons = re.search(patron_cons_eci, texto_completo)
+        
         consumos = {
             'punta': float(match_cons.group(1).replace(',', '.')) if match_cons else 0.0,
             'llano': float(match_cons.group(2).replace(',', '.')) if match_cons else 0.0,
@@ -107,10 +108,13 @@ def extraer_datos_factura(pdf_path):
         compania = "Naturgy"
         m_fecha = re.search(r'Fecha\s+de\s+emisión:\s*([\d/]+)', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
+        
         m_dias = re.search(r'Financiación\s+de\s+Bono\s+Social\s+(\d+)\s+días', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
+        
         m_pot = re.search(r'Potencia\s+contratada\s+P1:\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
+        
         m_punta = re.search(r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         m_llano = re.search(r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         m_valle = re.search(r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
@@ -119,8 +123,10 @@ def extraer_datos_factura(pdf_path):
             'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
             'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
         }
+        
         m_exc = re.search(r'Valoración\s+excedentes\s*(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(m_exc.group(1).replace(',', '.'))) if m_exc else 0.0
+        
         m_subtotal = re.search(r'Subtotal\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         if m_subtotal:
             total_real = float(m_subtotal.group(1).replace(',', '.'))
@@ -198,10 +204,7 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0
 
     else:
-        # --- SECCIÓN CORREGIDA PARA ENERGÍA XXI ---
         if es_xxi: compania = "Energía XXI"
-        
-        # Patrones mejorados para detectar consumo en tablas o texto
         patrones_consumo = {
             'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'P1\s*\(punta\).*?([\d,.]+)\s*kWh'],
             'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'P2\s*\(llano\).*?([\d,.]+)\s*kWh'],
@@ -215,26 +218,24 @@ def extraer_datos_factura(pdf_path):
                 if match:
                     consumos[tramo] = float(match.group(1).replace(',', '.'))
                     break
-                    
-        # Potencia con soporte para comillas (formato tabla PDF)
+        
         patron_potencia = r'Potencia\s+contratada\s+en\s+punta-llano:?\s*"?\s*([\d,.]+)\s*kW'
         match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        # Fecha de emisión
         patron_fecha = r'(?:emitida\s+el|Fecha\s+de\s+emisión:)\s*([\d/]+\s*(?:de\s+\w+\s+de\s+)?\d{2,4})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
         
-        # Días entre paréntesis (formato específico Energía XXI)
+        # En Energía XXI los días suelen venir en paréntesis (28 días)
         match_dias = re.search(r'\((\d+)\s*días\)', texto_completo)
+        if not match_dias: match_dias = re.search(r'(\d+)\s*días', texto_completo)
         dias = int(match_dias.group(1)) if match_dias else 0
         
-        # Excedentes
         match_excedente = re.search(r'Valoración\s+excedentes.*?(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        # Total Real optimizado para capturar el desglose con comillas/comas
+        # Extracción robusta de los valores de potencia y energía para Total Real
         m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s*"?\s*,\s*"?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s*"?\s*,\s*"?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
@@ -251,7 +252,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# --- Código Streamlit (Sin cambios adicionales) ---
+# --- Código Streamlit ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
@@ -333,15 +334,21 @@ else:
                 with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
                 with c2: st.metric(label="Ahorro Total Acumulado", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €")
 
+            # --- PARTE AÑADIDA: VISUALIZACIÓN IGUAL A LA FOTO ---
             st.subheader("📊 Comparativa Detallada por Factura")
+            
             df_mostrar = df_comp.drop(columns=['Dias_Factura'], errors='ignore')
+            
             st.dataframe(
                 df_mostrar,
                 use_container_width=True,
                 hide_index=True,
                 column_config={
                     "Coste (€)": st.column_config.NumberColumn(format="%.2f"),
-                    "Ahorro": st.column_config.NumberColumn(format="%.2f", help="Ahorro respecto a tu factura actual"),
+                    "Ahorro": st.column_config.NumberColumn(
+                        format="%.2f",
+                        help="Ahorro respecto a tu factura actual"
+                    ),
                 }
             )
 
