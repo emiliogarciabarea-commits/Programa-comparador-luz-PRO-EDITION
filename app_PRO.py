@@ -234,15 +234,17 @@ def extraer_datos_factura(pdf_path):
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        # --- CORRECCIÓN TOTAL REAL ENERGÍA XXI (Potencia + Energía) ---
-        # Se ha mejorado el regex para capturar valores aunque tengan comillas o saltos de línea (como en el PDF actual)
+        # --- CORRECCIÓN TOTAL REAL ENERGÍA XXI (Suma Potencia + Energía) ---
+        # Buscamos los importes ignorando comillas o saltos de línea procedentes del extractor
         m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
         m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida.*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
         
         if m_val_pot_xxi and m_val_ene_xxi:
-            total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
+            v_pot = float(m_val_pot_xxi.group(1).replace(',', '.'))
+            v_ene = float(m_val_ene_xxi.group(1).replace(',', '.'))
+            total_real = v_pot + v_ene
         else:
-            match_total = re.search(r'IMPORTE\s+FACTURA:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
+            match_total = re.search(r'Total\s+electricidad\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
             total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
     return {
