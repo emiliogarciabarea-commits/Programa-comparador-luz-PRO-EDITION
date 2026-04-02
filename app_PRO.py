@@ -227,25 +227,22 @@ def extraer_datos_factura(pdf_path):
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
         
-        match_dias = re.search(r'\((\d+)\s*días\)', texto_completo)
-        if not match_dias: match_dias = re.search(r'(\d+)\s*días', texto_completo)
+        # Corrección Días Energía XXI
+        match_dias = re.search(r'(\d+)\s*días', texto_completo, re.IGNORECASE)
         dias = int(match_dias.group(1)) if match_dias else 0
         
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        # EXTRACCIÓN MEJORADA PARA RESUMEN ENERGÍA XXI (Potencia + Energía)
-        # Se usa re.DOTALL y flexibilidad total para saltar comillas y comas del formato de tabla
-        p_pot = r'potencia\s+contratada.*?"?\s*,?\s*"?([\d,]+)\s*€'
-        p_ene = r'energía\s+consumida.*?"?\s*,?\s*"?([\d,]+)\s*€'
+        # Corrección Suma Total Energía XXI (Soportando comillas y saltos de línea de la tabla)
+        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s*"?\s*,\s*"?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s*"?\s*,\s*"?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         
-        m_pot = re.search(p_pot, texto_completo, re.IGNORECASE | re.DOTALL)
-        m_ene = re.search(p_ene, texto_completo, re.IGNORECASE | re.DOTALL)
-        
-        if m_pot and m_ene:
-            total_real = float(m_pot.group(1).replace(',', '.')) + float(m_ene.group(1).replace(',', '.'))
+        if m_val_pot_xxi and m_val_ene_xxi:
+            total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
         else:
-            match_total = re.search(r'TOTAL\s+IMPORTE\s+FACTURA.*?"?\s*,?\s*"?([\d,.]+)\s*€', texto_completo, re.IGNORECASE | re.DOTALL)
+            # Si falla el desglose, buscamos el Total de la factura directamente
+            match_total = re.search(r'IMPORTE\s+FACTURA:\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
             total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
     return {
