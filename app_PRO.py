@@ -223,7 +223,8 @@ def extraer_datos_factura(pdf_path):
         match_potencia = re.search(patron_potencia, texto_completo)
         potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
         
-        patron_fecha = r'emitida\s+el\s+([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
+        # Corrección Fecha para Energía XXI: Buscamos el fin del periodo de consumo
+        patron_fecha = r'Periodo\s+de\s+consumo:.*?al?\s*([\d]{1,2}\s+de\s+\w+\s+de\s+\d{4})'
         match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
         fecha = match_fecha.group(1) if match_fecha else "No encontrada"
         
@@ -233,8 +234,14 @@ def extraer_datos_factura(pdf_path):
         match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        match_total = re.search(r'TOTAL\s+IMPORTE\s+FACTURA\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
+        # Corrección Total Real para Energía XXI: Captura el importe final de la factura
+        match_total_final = re.search(r'TOTAL\s+IMPORTE\s+FACTURA\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        if match_total_final:
+            total_real = float(match_total_final.group(1).replace(',', '.'))
+        else:
+            m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s*[\n\r]*\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s*[\n\r]*\s*\"?,?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            total_real = (float(m_val_pot_xxi.group(1).replace(',', '.')) if m_val_pot_xxi else 0.0) + (float(m_val_ene_xxi.group(1).replace(',', '.')) if m_val_ene_xxi else 0.0)
 
     return {
         "Compañía": compania, "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
