@@ -206,24 +206,18 @@ def extraer_datos_factura(pdf_path):
     else:
         if es_xxi: compania = "Energía XXI"
         
-        # --- BÚSQUEDA DE FECHA ULTRA-ROBUSTA ---
-        # Busca el texto y captura la fecha entre paréntesis (formato: Lectura actual (real) (14 de marzo de 2026))
         m_fecha = re.search(r'Lectura.*?actual.*?real.*?(\d{1,2}.*?\d{4})', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1).strip() if m_fecha else "No encontrada"
 
-        # --- BÚSQUEDA DE TOTAL REAL (SUMA POTENCIA + ENERGIA) ---
-        # Localiza la palabra clave y captura el primer número decimal que aparezca después (ignora puntos de relleno)
         m_p_eur = re.search(r'potencia.*?contratada.*?(\d+[\d,.]*)', texto_completo, re.IGNORECASE)
         m_e_eur = re.search(r'energ[íi]a.*?consumida.*?(\d+[\d,.]*)', texto_completo, re.IGNORECASE)
         
         if m_p_eur and m_e_eur:
             total_real = float(m_p_eur.group(1).replace(',', '.')) + float(m_e_eur.group(1).replace(',', '.'))
         else:
-            # Fallback a la fila de "Facturación por potencia contratada" si el resumen falla
             m_alt = re.search(r'Facturaci[oó]n.*?potencia.*?contratada.*?(\d+[\d,.]*)', texto_completo, re.IGNORECASE)
             total_real = float(m_alt.group(1).replace(',', '.')) if m_alt else 0.0
 
-        # --- RESTO DE DATOS ---
         m_pot_kw = re.search(r'([\d,.]+)\s*kW', texto_completo)
         potencia = float(m_pot_kw.group(1).replace(',', '.')) if m_pot_kw else 0.0
         
@@ -254,7 +248,7 @@ def extraer_datos_factura(pdf_path):
         "Total Real": round(total_real, 2)
     }
 
-# --- Código Streamlit (Sin cambios) ---
+# --- Código Streamlit ---
 st.set_page_config(page_title="Comparador Energético", layout="wide")
 st.title("⚡ Comparador de Facturas Eléctricas Pro")
 
@@ -336,64 +330,34 @@ else:
                 with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
                 with c2: st.metric(label="Ahorro Total Acumulado", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €")
 
+                # Preparar datos para la 4ª hoja: Precios Tarifa Ganadora
+                tarifa_ganadora_info = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre].iloc[0]
+                df_precios_ganador = pd.DataFrame({
+                    "Concepto": ["Compañía Ganadora", "P1 Potencia (€/kW/día)", "P2 Potencia (€/kW/día)", "Energía Punta (€/kWh)", "Energía Llano (€/kWh)", "Energía Valle (€/kWh)", "Excedente (€/kWh)"],
+                    "Valor": [
+                        mejor_opcion_nombre,
+                        tarifa_ganadora_info.iloc[1],
+                        tarifa_ganadora_info.iloc[2],
+                        tarifa_ganadora_info.iloc[3],
+                        tarifa_ganadora_info.iloc[4],
+                        tarifa_ganadora_info.iloc[5],
+                        tarifa_ganadora_info.iloc[6]
+                    ]
+                })
+
             st.subheader("📊 Comparativa Detallada por Factura")
-            
             df_mostrar = df_comp.drop(columns=['Dias_Factura'], errors='ignore')
-            
-            st.dataframe(
-                df_mostrar,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Coste (€)": st.column_config.NumberColumn(format="%.2f"),
-                    "Ahorro": st.column_config.NumberColumn(
-                        format="%.2f",
-                        help="Ahorro respecto a tu factura actual"
-                    ),
-                }
-            )
+            st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
 
-           buffer_excel = io.BytesIO()
+            # --- GENERACIÓN DEL EXCEL CON 4 HOJAS ---
+            buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                # 1. Detalle Comparativa
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
-                
-                # 2. Ranking Ahorro
                 ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
-                
-                # 3. Datos Facturas Originales
                 df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
-                
-                # 4. Precios Tarifa Ganadora
-                # Buscamos los precios de la compañía que ha quedado primera en el ranking
                 if not ranking_total.empty:
-                    mejor_cia = ranking_total.iloc[0]['Compañía/Tarifa']
-                    # Filtramos en el df_tarifas original para obtener sus precios
-                    datos_ganadora = df_tarifas[df_tarifas.iloc[:, 0] == mejor_cia].iloc[0]
-                    
-                    df_precios_ganadora = pd.DataFrame({
-                        "Concepto": [
-                            "Compañía Ganadora", 
-                            "P1 Potencia (€/kW/día)", 
-                            "P2 Potencia (€/kW/día)", 
-                            "Energía Punta (€/kWh)", 
-                            "Energía Llano (€/kWh)", 
-                            "Energía Valle (€/kWh)", 
-                            "Excedente (€/kWh)"
-                        ],
-                        "Valor": [
-                            datos_ganadora.iloc[0],
-                            datos_ganadora.iloc[1],
-                            datos_ganadora.iloc[2],
-                            datos_ganadora.iloc[3],
-                            datos_ganadora.iloc[4],
-                            datos_ganadora.iloc[5],
-                            datos_ganadora.iloc[6]
-                        ]
-                    })
-                    df_precios_ganadora.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
+                    df_precios_ganador.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
 
-            # Botón de descarga actualizado
             st.download_button(
                 label="📥 Descargar Informe Completo",
                 data=buffer_excel.getvalue(),
