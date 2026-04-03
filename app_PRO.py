@@ -49,7 +49,7 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_chc:
-        compania = "CHC Energía"
+        compania = "chc"
         # Fecha: Al lado de Fecha de emisión
         m_fecha = re.search(r'Fecha\s+de\s+cargo:\s*([\d/.]+)', texto_completo)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
