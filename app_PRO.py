@@ -50,31 +50,31 @@ def extraer_datos_factura(pdf_path):
 
     elif es_chc:
         compania = "CHC Energía"
-        # Fecha al lado de Fecha de emisión
-        m_fecha = re.search(r'Fecha\s+de\s+emisión:\s*([\d.]{10})', texto_completo, re.IGNORECASE)
+        # Fecha: Al lado de Fecha de emisión
+        m_fecha = re.search(r'Fecha\s+de\s+emisión:\s*([\d/.]+)', texto_completo)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
         
-        # Potencia (kW) debajo de P1 en la tabla de potencias contratadas
-        m_pot = re.search(r'Potencias\s+contratadas\s*\(kW\)\s+P1\s+P2\s+([\d,.]+)', texto_completo, re.IGNORECASE)
+        # Días: Buscamos el periodo o días en el texto
+        m_dias = re.search(r'(\d+)\s+días', texto_completo)
+        dias = int(m_dias.group(1)) if m_dias else 0
+        
+        # Potencia: En la tabla debajo de P1
+        m_pot = re.search(r'Potencias\s+contratadas\s*\(kW\)\s*([\d,.]+)', texto_completo)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
         
-        # Consumos en la fila "Consumo(kWh)" tabla P1, P2, P3
-        m_cons = re.search(r'Consumo\(kWh\)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)', texto_completo, re.IGNORECASE)
+        # Consumos: Fila Consumo(kWh) para P1, P2 y P3
+        m_cons = re.search(r'Consumo\(kWh\)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)', texto_completo)
         consumos = {
             'punta': float(m_cons.group(1).replace(',', '.')) if m_cons else 0.0,
             'llano': float(m_cons.group(2).replace(',', '.')) if m_cons else 0.0,
             'valle': float(m_cons.group(3).replace(',', '.')) if m_cons else 0.0
         }
         
-        # Días (buscando en el desglose de potencia o bono social)
-        m_dias = re.search(r'(\d+)\s+días', texto_completo)
-        dias = int(m_dias.group(1)) if m_dias else 0
-        
-        # Total Real = Suma de Energía XX,XX € + Potencia XX,XX €
-        m_imp_pot = re.search(r'Potencia\s+\*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        m_imp_ene = re.search(r'Energía\s+\*?([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
-        v_pot = float(m_imp_pot.group(1).replace(',', '.')) if m_imp_pot else 0.0
-        v_ene = float(m_imp_ene.group(1).replace(',', '.')) if m_imp_ene else 0.0
+        # Total Real: Suma de Energía *XX,XX€ + Potencia *XX,XX€
+        m_val_pot = re.search(r'Potencia\s+\*([\d,.]+)\s*€', texto_completo)
+        m_val_ene = re.search(r'Energía\s+\*([\d,.]+)\s*€', texto_completo)
+        v_pot = float(m_val_pot.group(1).replace(',', '.')) if m_val_pot else 0.0
+        v_ene = float(m_val_ene.group(1).replace(',', '.')) if m_val_ene else 0.0
         total_real = v_pot + v_ene
         excedente = 0.0
 
@@ -302,7 +302,7 @@ else:
             df_resumen_pdfs = df_resumen_pdfs[cols]
 
             with st.expander("🔍 Ver y corregir datos extraídos", expanded=True):
-                # Se aplica column_order para mantener las columnas fijas
+                # Se mantiene el orden de columnas fijo
                 df_resumen_pdfs = st.data_editor(df_resumen_pdfs, use_container_width=True, hide_index=True, column_order=cols)
 
             df_tarifas = pd.read_excel(excel_path)
