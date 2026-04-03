@@ -275,7 +275,8 @@ else:
             df_resumen_pdfs = df_resumen_pdfs[cols]
 
             with st.expander("🔍 Ver y corregir datos extraídos", expanded=True):
-                df_resumen_pdfs = st.data_editor(df_resumen_pdfs, use_container_width=True, hide_index=True)
+                # Se añade column_order para evitar que el usuario mueva las columnas de sitio
+                df_resumen_pdfs = st.data_editor(df_resumen_pdfs, use_container_width=True, hide_index=True, column_order=cols)
 
             df_tarifas = pd.read_excel(excel_path)
             resultados_finales = []
