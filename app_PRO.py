@@ -20,7 +20,7 @@ def extraer_datos_factura(pdf_path):
     es_total_energies = re.search(r'TotalEnergies', texto_completo, re.IGNORECASE)
     es_xxi = re.search(r'Energía\s+XXI', texto_completo, re.IGNORECASE)
     es_octopus = re.search(r'octopus\s+energy', texto_completo, re.IGNORECASE)
-    es_chc = re.search(r'chc\s+energía', texto_completo, re.IGNORECASE)
+    es_chc = re.search(r'CHC\s+Energía', texto_completo, re.IGNORECASE)
 
     compania = "Genérica / Desconocida" # Valor por defecto
 
