@@ -20,7 +20,8 @@ def extraer_datos_factura(pdf_path):
     es_total_energies = re.search(r'TotalEnergies', texto_completo, re.IGNORECASE)
     es_xxi = re.search(r'Energía\s+XXI', texto_completo, re.IGNORECASE)
     es_octopus = re.search(r'octopus\s+energy', texto_completo, re.IGNORECASE)
-    es_chc = re.search(r'CHC\s+ENERGIA', texto_completo, re.IGNORECASE)
+    # Detección mejorada para CHC Energía
+    es_chc = re.search(r'CHC\s+ENERG[ÍI]A', texto_completo, re.IGNORECASE)
 
     compania = "Genérica / Desconocida" # Valor por defecto
 
@@ -49,20 +50,20 @@ def extraer_datos_factura(pdf_path):
         excedente = 0.0 
 
     elif es_chc:
-        compania = "chc"
-        # Fecha: Al lado de Fecha de emisión
-        m_fecha = re.search(r'Fecha\s+de\s+cargo:\s*([\d/.]+)', texto_completo)
+        compania = "CHC Energía"
+        # Fecha: Al lado de Fecha de emisión (acepta puntos o barras)
+        m_fecha = re.search(r'Fecha\s+de\s+emisión:\s*([\d./-]+)', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
         
-        # Días: Buscamos el periodo o días en el texto
+        # Días: Extraído de la sección de Bono Social o Periodo (28 días en la foto)
         m_dias = re.search(r'(\d+)\s+días', texto_completo)
         dias = int(m_dias.group(1)) if m_dias else 0
         
-        # Potencia: En la tabla debajo de P1
-        m_pot = re.search(r'Potencias\s+contratadas\s*\(kW\)\s*([\d,.]+)', texto_completo)
+        # Potencia: Valor debajo de P1 en la tabla de potencias contratadas
+        m_pot = re.search(r'contratadas\s*\(kW\)\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
         
-        # Consumos: Fila Consumo(kWh) para P1, P2 y P3
+        # Consumos: Fila "Consumo(kWh)" con valores para P1, P2 y P3
         m_cons = re.search(r'Consumo\(kWh\)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)', texto_completo)
         consumos = {
             'punta': float(m_cons.group(1).replace(',', '.')) if m_cons else 0.0,
@@ -70,9 +71,9 @@ def extraer_datos_factura(pdf_path):
             'valle': float(m_cons.group(3).replace(',', '.')) if m_cons else 0.0
         }
         
-        # Total Real: Suma de Energía *XX,XX€ + Potencia *XX,XX€
-        m_val_pot = re.search(r'Potencia\s+\*([\d,.]+)\s*€', texto_completo)
-        m_val_ene = re.search(r'Energía\s+\*([\d,.]+)\s*€', texto_completo)
+        # Total Real: Suma de Energía y Potencia (vienen con un asterisco en CHC)
+        m_val_pot = re.search(r'Potencia\s+\*?([\d,.]+)\s*€', texto_completo)
+        m_val_ene = re.search(r'Energía\s+\*?([\d,.]+)\s*€', texto_completo)
         v_pot = float(m_val_pot.group(1).replace(',', '.')) if m_val_pot else 0.0
         v_ene = float(m_val_ene.group(1).replace(',', '.')) if m_val_ene else 0.0
         total_real = v_pot + v_ene
@@ -302,7 +303,7 @@ else:
             df_resumen_pdfs = df_resumen_pdfs[cols]
 
             with st.expander("🔍 Ver y corregir datos extraídos", expanded=True):
-                # Se mantiene el orden de columnas fijo
+                # Se mantiene el orden de columnas fijo con column_order
                 df_resumen_pdfs = st.data_editor(df_resumen_pdfs, use_container_width=True, hide_index=True, column_order=cols)
 
             df_tarifas = pd.read_excel(excel_path)
