@@ -127,6 +127,7 @@ def extraer_datos_factura(pdf_path):
         m_exc = re.search(r'Valoración\s+excedentes\s*(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(m_exc.group(1).replace(',', '.'))) if m_exc else 0.0
         
+        # --- Modificación solicitada para Naturgy ---
         m_subtotal = re.search(r'Subtotal\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         if m_subtotal:
             total_real = float(m_subtotal.group(1).replace(',', '.'))
@@ -205,26 +206,10 @@ def extraer_datos_factura(pdf_path):
 
     else:
         if es_xxi: compania = "Energía XXI"
-        
-        m_fecha = re.search(r'Lectura.*?actual.*?real.*?(\d{1,2}.*?\d{4})', texto_completo, re.IGNORECASE)
-        fecha = m_fecha.group(1).strip() if m_fecha else "No encontrada"
-
-        m_p_eur = re.search(r'potencia.*?contratada.*?(\d+[\d,.]*)', texto_completo, re.IGNORECASE)
-        m_e_eur = re.search(r'energ[íi]a.*?consumida.*?(\d+[\d,.]*)', texto_completo, re.IGNORECASE)
-        
-        if m_p_eur and m_e_eur:
-            total_real = float(m_p_eur.group(1).replace(',', '.')) + float(m_e_eur.group(1).replace(',', '.'))
-        else:
-            m_alt = re.search(r'Facturaci[oó]n.*?potencia.*?contratada.*?(\d+[\d,.]*)', texto_completo, re.IGNORECASE)
-            total_real = float(m_alt.group(1).replace(',', '.')) if m_alt else 0.0
-
-        m_pot_kw = re.search(r'([\d,.]+)\s*kW', texto_completo)
-        potencia = float(m_pot_kw.group(1).replace(',', '.')) if m_pot_kw else 0.0
-        
         patrones_consumo = {
-            'punta': [r'P1:?\s*([\d,.]+)\s*kWh', r'Punta\s*([\d,.]+)\s*kWh'],
-            'llano': [r'P2:?\s*([\d,.]+)\s*kWh', r'Llano\s*([\d,.]+)\s*kWh'],
-            'valle': [r'P3:?\s*([\d,.]+)\s*kWh', r'Valle\s*([\d,.]+)\s*kWh']
+            'punta': [r'Consumo\s+en\s+P1:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Punta\s*([\d,.]+)\s*kWh'],
+            'llano': [r'Consumo\s+en\s+P2:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Llano\s*([\d,.]+)\s*kWh'],
+            'valle': [r'Consumo\s+en\s+P3:?\s*([\d,.]+)\s*kWh', r'Consumo\s+electricidad\s+Valle\s*([\d,.]+)\s*kWh']
         }
         consumos = {}
         for tramo, patrones in patrones_consumo.items():
@@ -234,12 +219,24 @@ def extraer_datos_factura(pdf_path):
                 if match:
                     consumos[tramo] = float(match.group(1).replace(',', '.'))
                     break
-
-        m_dias = re.search(r'(\d+)\s*días', texto_completo, re.IGNORECASE)
-        dias = int(m_dias.group(1)) if m_dias else 0
+        patron_potencia = r'(?:Potencia\s+contratada(?:\s+en\s+punta-llano|\s+P1)?):\s*([\d,.]+)\s*kW'
+        match_potencia = re.search(patron_potencia, texto_completo, re.IGNORECASE)
+        potencia = float(match_potencia.group(1).replace(',', '.')) if match_potencia else 0.0
+        patron_fecha = r'(?:emitida\s+el|Fecha\s+de\s+emisión:)\s*([\d/]+\s*(?:de\s+\w+\s+de\s+)?\d{2,4})'
+        match_fecha = re.search(patron_fecha, texto_completo, re.IGNORECASE)
+        fecha = match_fecha.group(1) if match_fecha else "No encontrada"
+        match_dias = re.search(r'(\d+)\s*días', texto_completo)
+        dias = int(match_dias.group(1)) if match_dias else 0
+        match_excedente = re.search(r'Valoración\s+excedentes\s*(?:-?\d+[\d,.]*\s*€/kWh)?\s*(-?\d+[\d,.]*)\s*kWh', texto_completo, re.IGNORECASE)
+        excedente = abs(float(match_excedente.group(1).replace(',', '.'))) if match_excedente else 0.0
         
-        m_exc = re.search(r'Valoración\s+excedentes.*?(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE | re.DOTALL)
-        excedente = abs(float(m_exc.group(1).replace(',', '.'))) if m_exc else 0.0
+        m_val_pot_xxi = re.search(r'Por\s+potencia\s+contratada\s+.*?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        m_val_ene_xxi = re.search(r'Por\s+energía\s+consumida\s+.*?\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+        if m_val_pot_xxi and m_val_ene_xxi:
+            total_real = float(m_val_pot_xxi.group(1).replace(',', '.')) + float(m_val_ene_xxi.group(1).replace(',', '.'))
+        else:
+            match_total = re.search(r'Total\s+electricidad\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
+            total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
 
     return {
         "Compañía": compania, "Fecha": fecha, "Días": dias, "Potencia (kW)": potencia,
@@ -275,8 +272,7 @@ else:
             df_resumen_pdfs = df_resumen_pdfs[cols]
 
             with st.expander("🔍 Ver y corregir datos extraídos", expanded=True):
-                # Se añade column_order para evitar que el usuario mueva las columnas de sitio
-                df_resumen_pdfs = st.data_editor(df_resumen_pdfs, use_container_width=True, hide_index=True, column_order=cols)
+                df_resumen_pdfs = st.data_editor(df_resumen_pdfs, use_container_width=True, hide_index=True)
 
             df_tarifas = pd.read_excel(excel_path)
             resultados_finales = []
@@ -331,33 +327,29 @@ else:
                 with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
                 with c2: st.metric(label="Ahorro Total Acumulado", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €")
 
-                # Preparar datos para la 4ª hoja: Precios Tarifa Ganadora
-                tarifa_ganadora_info = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre].iloc[0]
-                df_precios_ganador = pd.DataFrame({
-                    "Concepto": ["Compañía Ganadora", "P1 Potencia (€/kW/día)", "P2 Potencia (€/kW/día)", "Energía Punta (€/kWh)", "Energía Llano (€/kWh)", "Energía Valle (€/kWh)", "Excedente (€/kWh)"],
-                    "Valor": [
-                        mejor_opcion_nombre,
-                        tarifa_ganadora_info.iloc[1],
-                        tarifa_ganadora_info.iloc[2],
-                        tarifa_ganadora_info.iloc[3],
-                        tarifa_ganadora_info.iloc[4],
-                        tarifa_ganadora_info.iloc[5],
-                        tarifa_ganadora_info.iloc[6]
-                    ]
-                })
-
+            # --- PARTE AÑADIDA: VISUALIZACIÓN IGUAL A LA FOTO ---
             st.subheader("📊 Comparativa Detallada por Factura")
+            
             df_mostrar = df_comp.drop(columns=['Dias_Factura'], errors='ignore')
-            st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
+            
+            st.dataframe(
+                df_mostrar,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Coste (€)": st.column_config.NumberColumn(format="%.2f"),
+                    "Ahorro": st.column_config.NumberColumn(
+                        format="%.2f",
+                        help="Ahorro respecto a tu factura actual"
+                    ),
+                }
+            )
 
-            # --- GENERACIÓN DEL EXCEL CON 4 HOJAS ---
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
                 ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
                 df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
-                if not ranking_total.empty:
-                    df_precios_ganador.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
 
             st.download_button(
                 label="📥 Descargar Informe Completo",
