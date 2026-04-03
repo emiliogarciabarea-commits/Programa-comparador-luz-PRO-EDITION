@@ -20,8 +20,6 @@ def extraer_datos_factura(pdf_path):
     es_total_energies = re.search(r'TotalEnergies', texto_completo, re.IGNORECASE)
     es_xxi = re.search(r'Energía\s+XXI', texto_completo, re.IGNORECASE)
     es_octopus = re.search(r'octopus\s+energy', texto_completo, re.IGNORECASE)
-    # Detección mejorada para CHC Energía
-    es_chc = re.search(r'CHC\s+ENERG[ÍI]A', texto_completo, re.IGNORECASE)
 
     compania = "Genérica / Desconocida" # Valor por defecto
 
@@ -48,36 +46,6 @@ def extraer_datos_factura(pdf_path):
         match_total = re.search(patron_total, texto_completo)
         total_real = float(match_total.group(1).replace(',', '.')) if match_total else 0.0
         excedente = 0.0 
-
-    elif es_chc:
-        compania = "CHC Energía"
-        # Fecha: Al lado de Fecha de emisión (acepta puntos o barras)
-        m_fecha = re.search(r'Fecha\s+de\s+emisión:\s*([\d./-]+)', texto_completo, re.IGNORECASE)
-        fecha = m_fecha.group(1) if m_fecha else "No encontrada"
-        
-        # Días: Extraído de la sección de Bono Social o Periodo (28 días en la foto)
-        m_dias = re.search(r'(\d+)\s+días', texto_completo)
-        dias = int(m_dias.group(1)) if m_dias else 0
-        
-        # Potencia: Valor debajo de P1 en la tabla de potencias contratadas
-        m_pot = re.search(r'contratadas\s*\(kW\)\s*([\d,.]+)', texto_completo, re.IGNORECASE)
-        potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
-        
-        # Consumos: Fila "Consumo(kWh)" con valores para P1, P2 y P3
-        m_cons = re.search(r'Consumo\(kWh\)\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)', texto_completo)
-        consumos = {
-            'punta': float(m_cons.group(1).replace(',', '.')) if m_cons else 0.0,
-            'llano': float(m_cons.group(2).replace(',', '.')) if m_cons else 0.0,
-            'valle': float(m_cons.group(3).replace(',', '.')) if m_cons else 0.0
-        }
-        
-        # Total Real: Suma de Energía y Potencia (vienen con un asterisco en CHC)
-        m_val_pot = re.search(r'Potencia\s+\*?([\d,.]+)\s*€', texto_completo)
-        m_val_ene = re.search(r'Energía\s+\*?([\d,.]+)\s*€', texto_completo)
-        v_pot = float(m_val_pot.group(1).replace(',', '.')) if m_val_pot else 0.0
-        v_ene = float(m_val_ene.group(1).replace(',', '.')) if m_val_ene else 0.0
-        total_real = v_pot + v_ene
-        excedente = 0.0
 
     elif es_octopus:
         compania = "Octopus Energy"
@@ -159,6 +127,7 @@ def extraer_datos_factura(pdf_path):
         m_exc = re.search(r'Valoración\s+excedentes\s*(-?[\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = abs(float(m_exc.group(1).replace(',', '.'))) if m_exc else 0.0
         
+        # --- Modificación solicitada para Naturgy ---
         m_subtotal = re.search(r'Subtotal\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         if m_subtotal:
             total_real = float(m_subtotal.group(1).replace(',', '.'))
@@ -303,8 +272,7 @@ else:
             df_resumen_pdfs = df_resumen_pdfs[cols]
 
             with st.expander("🔍 Ver y corregir datos extraídos", expanded=True):
-                # Se mantiene el orden de columnas fijo con column_order
-                df_resumen_pdfs = st.data_editor(df_resumen_pdfs, use_container_width=True, hide_index=True, column_order=cols)
+                df_resumen_pdfs = st.data_editor(df_resumen_pdfs, use_container_width=True, hide_index=True)
 
             df_tarifas = pd.read_excel(excel_path)
             resultados_finales = []
@@ -359,6 +327,7 @@ else:
                 with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
                 with c2: st.metric(label="Ahorro Total Acumulado", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €")
 
+            # --- PARTE AÑADIDA: VISUALIZACIÓN IGUAL A LA FOTO ---
             st.subheader("📊 Comparativa Detallada por Factura")
             
             df_mostrar = df_comp.drop(columns=['Dias_Factura'], errors='ignore')
