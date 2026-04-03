@@ -208,7 +208,7 @@ def extraer_datos_factura(pdf_path):
         
         # --- BÚSQUEDA DE FECHA ULTRA-ROBUSTA ---
         # Busca el texto y captura la fecha entre paréntesis (formato: Lectura actual (real) (14 de marzo de 2026))
-        m_fecha = re.search(r'Lectura.?actual.?real.?(\d{1,2}.?\d{4})', texto_completo, re.IGNORECASE)
+        m_fecha = re.search(r'Lectura.*?actual.*?real.*?(\d{1,2}.*?\d{4})', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1).strip() if m_fecha else "No encontrada"
 
         # --- BÚSQUEDA DE TOTAL REAL (SUMA POTENCIA + ENERGIA) ---
