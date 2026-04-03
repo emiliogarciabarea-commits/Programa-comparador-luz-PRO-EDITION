@@ -353,12 +353,47 @@ else:
                 }
             )
 
-            buffer_excel = io.BytesIO()
+           buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+                # 1. Detalle Comparativa
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
+                
+                # 2. Ranking Ahorro
                 ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
+                
+                # 3. Datos Facturas Originales
                 df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
+                
+                # 4. Precios Tarifa Ganadora
+                # Buscamos los precios de la compañía que ha quedado primera en el ranking
+                if not ranking_total.empty:
+                    mejor_cia = ranking_total.iloc[0]['Compañía/Tarifa']
+                    # Filtramos en el df_tarifas original para obtener sus precios
+                    datos_ganadora = df_tarifas[df_tarifas.iloc[:, 0] == mejor_cia].iloc[0]
+                    
+                    df_precios_ganadora = pd.DataFrame({
+                        "Concepto": [
+                            "Compañía Ganadora", 
+                            "P1 Potencia (€/kW/día)", 
+                            "P2 Potencia (€/kW/día)", 
+                            "Energía Punta (€/kWh)", 
+                            "Energía Llano (€/kWh)", 
+                            "Energía Valle (€/kWh)", 
+                            "Excedente (€/kWh)"
+                        ],
+                        "Valor": [
+                            datos_ganadora.iloc[0],
+                            datos_ganadora.iloc[1],
+                            datos_ganadora.iloc[2],
+                            datos_ganadora.iloc[3],
+                            datos_ganadora.iloc[4],
+                            datos_ganadora.iloc[5],
+                            datos_ganadora.iloc[6]
+                        ]
+                    })
+                    df_precios_ganadora.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
 
+            # Botón de descarga actualizado
             st.download_button(
                 label="📥 Descargar Informe Completo",
                 data=buffer_excel.getvalue(),
