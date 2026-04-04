@@ -137,54 +137,68 @@ def extraer_datos_factura(pdf_path):
 
     elif es_endesa_luz:
         compania = "Endesa Energía"
-        # Fecha de emisión
+        # 1. Fecha de factura
         m_fecha_etiqueta = re.search(r'Fecha\s+emisión\s+factura:\s*([\d/]{10})', texto_completo, re.IGNORECASE)
         fecha = m_fecha_etiqueta.group(1) if m_fecha_etiqueta else "No encontrada"
         
-        # Días de facturación
+        # 2. Días de facturación
         m_dias = re.search(r'(\d+)\s+días', texto_completo, re.IGNORECASE)
         dias = int(m_dias.group(1)) if m_dias else 0
         
-        # Potencia contratada
-        m_pot = re.search(r'punta-llano\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
+        # 3. Potencia contratada (kW)
+        m_pot = re.search(r'(?:punta-llano|Potencia)\s*([\d,.]+)\s*kW', texto_completo, re.IGNORECASE)
         potencia = float(m_pot.group(1).replace(',', '.')) if m_pot else 0.0
         
         def limpiar_valor_endesa(patron, texto):
-            match = re.search(patron, texto, re.IGNORECASE)
+            # Buscamos el patrón ignorando mayúsculas/minúsculas
+            match = re.search(patron, texto, re.IGNORECASE | re.DOTALL)
             if match:
-                # Quitamos puntos de miles y cambiamos coma por punto decimal
+                # Limpiamos espacios y puntos de miles, cambiamos coma por punto
                 valor_sucio = match.group(1).replace(" ", "").replace(".", "").replace(",", ".")
                 try: return float(valor_sucio)
                 except: return 0.0
             return 0.0
 
+        # --- COSTES (€) ---
+        # Buscamos "Potencia" seguida de puntos y el valor en €
         val_potencia = limpiar_valor_endesa(r'Potencia\s+\.+\s*([\d\s.,]+)€', texto_completo)
-        val_energia = limpiar_valor_endesa(r'Energía\s+consumida\s+de\s+la\s+red\s+([\d\s.,]+)€', texto_completo)
-        total_real = val_potencia + val_energia
-
-        # --- CORRECCIÓN DE CONSUMOS ---
-        # Buscamos la palabra y capturamos el último número de la línea (soporta negativos en columnas previas)
-        m_punta = re.search(r'^Punta.*\s+([\d,.]+)$', texto_completo, re.MULTILINE | re.IGNORECASE)
-        m_llano = re.search(r'^Llano.*\s+([\d,.]+)$', texto_completo, re.MULTILINE | re.IGNORECASE)
-        m_valle = re.search(r'^Valle.*\s+([\d,.]+)$', texto_completo, re.MULTILINE | re.IGNORECASE)
         
-        # Si no encuentra por línea completa, intentamos una versión más flexible
-        if not m_punta:
-            m_punta = re.search(r'Punta(?:\s+[\d,.-]+){4}\s+([\d,.]+)', texto_completo)
-        if not m_llano:
-            m_llano = re.search(r'Llano(?:\s+[\d,.-]+){4}\s+([\d,.]+)', texto_completo)
-        if not m_valle:
-            m_valle = re.search(r'Valle(?:\s+[\d,.-]+){4}\s+([\d,.]+)', texto_completo)
+        # Buscamos "Energía" o "Energia", opcionalmente "consumida de la red", 
+        # pero nos aseguramos de que NO sea la "vertida" (excedentes) usando un lookahead negativo
+        # Este patrón es muy flexible:
+        patron_energia_coste = r'Energ[ií]a(?!\s+vertida)(?:\s+consumida(?:\s+de\s+la\s+red)?)?\s*[\.\s]*([\d\s.,]+)€'
+        val_energia = limpiar_valor_endesa(patron_energia_coste, texto_completo)
+        
+        # El Total Real suele venir como "TOTAL" al final del detalle
+        total_factura = limpiar_valor_endesa(r'TOTAL\s+DE\s+ELECTRICIDAD\s*([\d\s.,]+)€', texto_completo)
+        if total_factura == 0:
+            total_factura = val_potencia + val_energia # Fallback si no encuentra el total
+        
+        total_real = total_factura
+
+        # --- CONSUMOS (kWh) ---
+        # Buscamos las líneas de la tabla. El consumo facturado es SIEMPRE el último número de la línea.
+        # El patrón [-\d,.]+ permite capturar números que pueden tener un signo negativo delante (ajustes)
+        # para llegar al valor final.
+        def extraer_kwh_tabla(tramo, texto):
+            # Busca la palabra (Punta/Llano/Valle) y captura el último número de esa línea
+            patron = rf'^{tramo}.*?\s+([\d,.]+)$'
+            match = re.search(patron, texto, re.MULTILINE | re.IGNORECASE)
+            if match:
+                return float(match.group(1).replace(',', '.'))
+            return 0.0
 
         consumos = {
-            'punta': float(m_punta.group(1).replace(',', '.')) if m_punta else 0.0,
-            'llano': float(m_llano.group(1).replace(',', '.')) if m_llano else 0.0,
-            'valle': float(m_valle.group(1).replace(',', '.')) if m_valle else 0.0
+            'punta': extraer_kwh_tabla('Punta', texto_completo),
+            'llano': extraer_kwh_tabla('Llano', texto_completo),
+            'valle': extraer_kwh_tabla('Valle', texto_completo)
         }
 
-        # Captura de excedentes (importante para facturas con Solar)
-        m_exc = re.search(r'Energia\s+vertida\s+a\s+la\s+red\s+([\d,.]+)\s+kWh', texto_completo, re.IGNORECASE)
+        # --- EXCEDENTES (kWh) ---
+        # Captura la energía vertida a la red para el cálculo de ahorro solar
+        m_exc = re.search(r'Energ[ií]a\s+vertida\s+a\s+la\s+red\s+([\d,.]+)\s+kWh', texto_completo, re.IGNORECASE)
         excedente = float(m_exc.group(1).replace(',', '.')) if m_exc else 0.0
+
 
     elif es_repsol:
         compania = "Repsol"
