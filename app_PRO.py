@@ -135,7 +135,7 @@ def extraer_datos_factura(pdf_path):
             m_total_elec = re.search(r'Total\s+electricidad\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
             total_real = float(m_total_elec.group(1).replace(',', '.')) if m_total_elec else 0.0
 
-    elif es_endesa_luz:
+   elif es_endesa_luz:
         compania = "Endesa Energía"
         # Fecha de emisión
         m_fecha_etiqueta = re.search(r'Fecha\s+emisión\s+factura:\s*([\d/]{10})', texto_completo, re.IGNORECASE)
@@ -159,7 +159,10 @@ def extraer_datos_factura(pdf_path):
             return 0.0
 
         val_potencia = limpiar_valor_endesa(r'Potencia\s+\.+\s*([\d\s.,]+)€', texto_completo)
-        val_energia = limpiar_valor_endesa(r'Energ[ií]a\s+consumida\s+de\s+la\s+red\s+([\d\s.,]+)€', texto_completo)
+        
+        # --- LINEA ADAPTADA PARA DETECTAR VARIANTES DE ENERGÍA ---
+        val_energia = limpiar_valor_endesa(r'Energ[ií]a(?:\s+consumida(?:\s+de\s+la\s+red)?)?[\s.]*([\d\s.,]+)€', texto_completo)
+        
         total_real = val_potencia + val_energia
 
         # --- CORRECCIÓN DE CONSUMOS ---
