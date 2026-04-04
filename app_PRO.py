@@ -159,7 +159,7 @@ def extraer_datos_factura(pdf_path):
             return 0.0
 
         val_potencia = limpiar_valor_endesa(r'Potencia\s+\.+\s*([\d\s.,]+)€', texto_completo)
-        val_energia = limpiar_valor_endesa(r'Energía\s+consumida\s+de\s+la\s+red\s+([\d\s.,]+)€', texto_completo)
+        val_energia = limpiar_valor_endesa(r'Energ[ií]a\s+consumida\s+de\s+la\s+red\s+([\d\s.,]+)€', texto_completo)
         total_real = val_potencia + val_energia
 
         # --- CORRECCIÓN DE CONSUMOS ---
