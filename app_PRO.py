@@ -138,7 +138,7 @@ def extraer_datos_factura(pdf_path):
     elif es_endesa_luz:
         compania = "Endesa Energía"
         # Fecha de emisión
-        m_fecha_etiqueta = re.search(r'Fecha\s+(?:emisi[oó]n\s+)?factura\s*:?\s*([\d/]{8,10})', texto_completo, re.IGNORECASE)
+       m_fecha_etiqueta = re.search(r'Fecha.*?emisi.*?([\d/]{8,10})', texto_completo, re.IGNORECASE | re.DOTALL)
         fecha = m_fecha_etiqueta.group(1) if m_fecha_etiqueta else "No encontrada"
         
         # Días de facturación
