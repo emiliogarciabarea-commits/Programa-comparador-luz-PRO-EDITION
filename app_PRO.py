@@ -94,7 +94,7 @@ def extraer_datos_factura(pdf_path):
             if match_cons:
                 return float(match_cons.group(1).replace('.', '').replace(',', '.'))
 
-        patron_gen = rf'{tipo}.*?([\d,.]+)\s*kWh'
+            patron_gen = rf'{tipo}.*?([\d,.]+)\s*kWh'
             matches = re.findall(patron_gen, texto, re.IGNORECASE)
             if matches: return float(matches[-1].replace('.', '').replace(',', '.'))
             return 0.0
