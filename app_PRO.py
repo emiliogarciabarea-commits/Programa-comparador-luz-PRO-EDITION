@@ -372,6 +372,27 @@ else:
             ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
 
             st.divider()
+
+            df_precios_ganadora = pd.DataFrame()
+            if not ranking_total.empty
+                mejor_opcion_nombre = ranking_total.iloc[0]['Compañía/Tarifa']
+                fila_ganadora = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre]
+                
+                if not fila_ganadora.empty:
+                    df_precios_ganadora = pd.DataFrame({
+                        "Concepto": ["Compañía Ganadora", "P1 Potencia (€/kW/día)", "P2 Potencia (€/kW/día)", 
+                                    "Energía Punta (€/kWh)", "Energía Llano (€/kWh)", "Energía Valle (€/kWh)", "Excedente (€/kWh)"],
+                        "Valor": [
+                            mejor_opcion_nombre,
+                            fila_ganadora.iloc[0, 1],
+                            fila_ganadora.iloc[0, 2],
+                            fila_ganadora.iloc[0, 3],
+                            fila_ganadora.iloc[0, 4],
+                            fila_ganadora.iloc[0, 5],
+                            fila_ganadora.iloc[0, 6]
+                        ]
+                    })
+
             
             if not ranking_total.empty:
                 mejor_opcion_nombre = ranking_total.iloc[0]['Compañía/Tarifa']
