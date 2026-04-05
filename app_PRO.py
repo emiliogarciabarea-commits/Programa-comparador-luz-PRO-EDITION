@@ -103,7 +103,6 @@ def extraer_datos_factura(pdf_path):
         'llano': extraer_kwh('llano', texto_completo),
         'valle': extraer_kwh('valle', texto_completo)
     }
-
     if sum(consumos.values()) == 0:
         m_gen = re.search(r'(\d+)\s*kWh\s+[\d,.]+\s*€/kWh', texto_completo)
         if m_gen: consumos['punta'] = float(m_gen.group(1))      
