@@ -71,48 +71,22 @@ def extraer_datos_factura(pdf_path):
         m_exc = re.search(r'Excedentes.*?([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = float(m_exc.group(1).replace(',', '.')) if m_exc else 0.0
 
-    elif es_total_energies:
-        compania = "TotalEnergies"
-        m_fecha = re.search(r'Fecha\s+emisión:\s*([\d.]{10})', texto_completo, re.IGNORECASE)
-        fecha = m_fecha.group(1) if m_fecha else "No encontrada"
-    
-        m_dias_meta = re.search(r'(\d+)\s+día\(s\)', texto_completo, re.IGNORECASE)
-        dias = int(m_dias_meta.group(1)) if m_dias_meta else 0
-    
-        m_pot_meta = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
-        potencia = float(m_pot_meta.group(1).replace(',', '.')) if m_pot_meta else 0.0
-    
-        total_real = 0.0
-        lineas = texto_completo.split('\n')
-    for linea in lineas:
-        linea_limpia = linea.strip()
-        if re.search(r'^(\d{2}\.\d{2}\.\d{4})|(\d+\s+día\(s\))', linea_limpia):
-            m_valor = re.findall(r'([\d,.]+)\s*€\s*$', linea_limpia)
-            if m_valor:
-                total_real += float(m_valor[-1].replace('.', '').replace(',', '.'))
-
-    # Función mejorada para extraer el consumo
     def extraer_kwh(tipo, texto):
-        # El patrón busca el tipo (punta/llano/valle), permite un ":" opcional 
-        # y captura el número antes de "kWh"
-        patron = rf'{tipo}:?\s*([\d,.]+)\s*kWh'
+        patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
         matches = re.findall(patron, texto, re.IGNORECASE)
-        if matches:
-            # Usamos [-1] porque el valor de la sección "Información adicional" (81,32)
-            # aparece cronológicamente después de la tabla de consumo en el OCR.
-            return float(matches[-1].replace('.', '').replace(',', '.'))
+        if matches: return float(matches[-1].replace('.', '').replace(',', '.'))
         return 0.0
 
     consumos = {
-        'punta': extraer_kwh('punta', texto_completo),
-        'llano': extraer_kwh('llano', texto_completo),
-        'valle': extraer_kwh('valle', texto_completo) # Extraerá 81,32
+        'punta': extraer_kwh('Punta', texto_completo),
+        'llano': extraer_kwh('Llano', texto_completo),
+        'valle': extraer_kwh('Valle', texto_completo)
     }
-
-    # Backup en caso de que no encuentre desglosados (mantiene tu lógica original)
     if sum(consumos.values()) == 0:
         m_gen = re.search(r'(\d+)\s*kWh\s+[\d,.]+\s*€/kWh', texto_completo)
         if m_gen: consumos['punta'] = float(m_gen.group(1))
+    excedente = 0.0
+    
     elif es_naturgy:
         compania = "Naturgy"
         m_fecha = re.search(r'Fecha\s+de\s+emisión:\s*([\d/]+)', texto_completo, re.IGNORECASE)
