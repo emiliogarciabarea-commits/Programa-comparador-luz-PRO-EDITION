@@ -87,9 +87,9 @@ def extraer_datos_factura(pdf_path):
         for linea in lineas:
             linea_limpia = linea.strip()
             if re.search(r'^(\d{2}\.\d{2}\.\d{4})|(\d+\s+día\(s\))', linea_limpia):
-            m_valor = re.findall(r'([\d,.]+)\s*€\s*$', linea_limpia)
-            if m_valor:
-                total_real += float(m_valor[-1].replace('.', '').replace(',', '.'))
+                m_valor = re.findall(r'([\d,.]+)\s*€\s*$', linea_limpia)
+                if m_valor:
+                    total_real += float(m_valor[-1].replace('.', '').replace(',', '.'))
 
     # Función mejorada para extraer el consumo
     def extraer_kwh(tipo, texto):
