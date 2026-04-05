@@ -104,10 +104,9 @@ def extraer_datos_factura(pdf_path):
             'llano': extraer_kwh('Llano', texto_completo),
             'valle': extraer_kwh('Valle', texto_completo)
         }
-        if sum(consumos.values()) == 0:
-            m_gen = re.search(r'(\d+)\s*kWh\s+[\d,.]+\s*€/kWh', texto_completo)
-            if m_gen: consumos['punta'] = float(m_gen.group(1))
-        excedente = 0.0
+        
+        m_excedentes = re.findall(r'(-?[\d,.]+)\s*kWh\s*\(Excedentes\)', texto_completo, re.IGNORECASE)
+        excedente = sum(abs(float(x.replace('.', '').replace(',', '.'))) for x in m_excedentes) if m_excedentes else 0.0
 
     elif es_naturgy:
         compania = "Naturgy"
