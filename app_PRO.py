@@ -91,32 +91,23 @@ def extraer_datos_factura(pdf_path):
                 if m_valor:
                     total_real += float(m_valor[-1].replace('.', '').replace(',', '.'))
 
-    # Función mejorada para extraer el consumo
     def extraer_kwh(tipo, texto):
-        # El patrón busca el tipo (punta/llano/valle), permite un ":" opcional 
-        # y captura el número antes de "kWh"
         patron = rf'{tipo}:?\s*([\d,.]+)\s*kWh'
         matches = re.findall(patron, texto, re.IGNORECASE)
         if matches:
-            # Usamos [-1] porque el valor de la sección "Información adicional" (81,32)
-            # aparece cronológicamente después de la tabla de consumo en el OCR.
             return float(matches[-1].replace('.', '').replace(',', '.'))
         return 0.0
 
     consumos = {
         'punta': extraer_kwh('punta', texto_completo),
         'llano': extraer_kwh('llano', texto_completo),
-        'valle': extraer_kwh('valle', texto_completo) # Extraerá 81,32
+        'valle': extraer_kwh('valle', texto_completo)
     }
 
-    # Backup en caso de que no encuentre desglosados (mantiene tu lógica original)
     if sum(consumos.values()) == 0:
         m_gen = re.search(r'(\d+)\s*kWh\s+[\d,.]+\s*€/kWh', texto_completo)
-        if m_gen: consumos['punta'] = float(m_gen.group(1))
-            
+        if m_gen: consumos['punta'] = float(m_gen.group(1))      
     excedente = 0.0
-
-    
 
 elif es_naturgy:
         compania = "Naturgy"
