@@ -372,27 +372,6 @@ else:
             ranking_total = ranking_total.sort_values(by="Ahorro", ascending=False)
 
             st.divider()
-
-            df_precios_ganadora = pd.DataFrame()
-            if not ranking_total.empty
-                mejor_opcion_nombre = ranking_total.iloc[0]['Compañía/Tarifa']
-                fila_ganadora = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre]
-                
-                if not fila_ganadora.empty:
-                    df_precios_ganadora = pd.DataFrame({
-                        "Concepto": ["Compañía Ganadora", "P1 Potencia (€/kW/día)", "P2 Potencia (€/kW/día)", 
-                                    "Energía Punta (€/kWh)", "Energía Llano (€/kWh)", "Energía Valle (€/kWh)", "Excedente (€/kWh)"],
-                        "Valor": [
-                            mejor_opcion_nombre,
-                            fila_ganadora.iloc[0, 1],
-                            fila_ganadora.iloc[0, 2],
-                            fila_ganadora.iloc[0, 3],
-                            fila_ganadora.iloc[0, 4],
-                            fila_ganadora.iloc[0, 5],
-                            fila_ganadora.iloc[0, 6]
-                        ]
-                    })
-
             
             if not ranking_total.empty:
                 mejor_opcion_nombre = ranking_total.iloc[0]['Compañía/Tarifa']
@@ -401,34 +380,35 @@ else:
                 with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
                 with c2: st.metric(label="Ahorro Total Acumulado", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €")
 
-            # --- PARTE AÑADIDA: VISUALIZACIÓN IGUAL A LA FOTO ---
-            st.subheader("📊 Comparativa Detallada por Factura")
-            
-            df_mostrar = df_comp.drop(columns=['Dias_Factura'], errors='ignore')
-            
-            st.dataframe(
-                df_mostrar,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Coste (€)": st.column_config.NumberColumn(format="%.2f"),
-                    "Ahorro": st.column_config.NumberColumn(
-                        format="%.2f",
-                        help="Ahorro respecto a tu factura actual"
-                    ),
-                }
-            )
+           tarifa_ganadora_info = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre].iloc[0]
+                df_precios_ganador = pd.DataFrame({
+                    "Concepto": ["Compañía Ganadora", "P1 Potencia (€/kW/día)", "P2 Potencia (€/kW/día)", "Energía Punta (€/kWh)", "Energía Llano (€/kWh)", "Energía Valle (€/kWh)", "Excedente (€/kWh)"],
+                    "Valor": [
+                        mejor_opcion_nombre,
+                        tarifa_ganadora_info.iloc[1],
+                        tarifa_ganadora_info.iloc[2],
+                        tarifa_ganadora_info.iloc[3],
+                        tarifa_ganadora_info.iloc[4],
+                        tarifa_ganadora_info.iloc[5],
+                        tarifa_ganadora_info.iloc[6]
+                    ]
+                })
 
+            st.subheader("📊 Comparativa Detallada por Factura")
+            df_mostrar = df_comp.drop(columns=['Dias_Factura'], errors='ignore')
+            st.dataframe(df_mostrar, use_container_width=True, hide_index=True)
+
+            # --- GENERACIÓN DEL EXCEL CON 4 HOJAS ---
             buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
                 ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
                 df_resumen_pdfs.to_excel(writer, index=False, sheet_name='Datos Facturas Originales')
-                if not df_precios_ganadora.empty:
-                    df_precios_ganadora.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
+                if not ranking_total.empty:
+                    df_precios_ganador.to_excel(writer, index=False, sheet_name='Precios Tarifa Ganadora')
 
             st.download_button(
-                label="📥 Descargar Informe Completo (4 Hojas)",
+                label="📥 Descargar Informe Completo",
                 data=buffer_excel.getvalue(),
                 file_name="estudio_ahorro_energetico.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
