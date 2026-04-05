@@ -104,8 +104,7 @@ def extraer_datos_factura(pdf_path):
             if m_gen: consumos['punta'] = float(m_gen.group(1))
         excedente = 0.0
 
-
-elif es_naturgy:
+    elif es_naturgy:
         compania = "Naturgy"
         m_fecha = re.search(r'Fecha\s+de\s+emisión:\s*([\d/]+)', texto_completo, re.IGNORECASE)
         fecha = m_fecha.group(1) if m_fecha else "No encontrada"
