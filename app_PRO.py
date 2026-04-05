@@ -91,8 +91,12 @@ def extraer_datos_factura(pdf_path):
         def extraer_kwh(tipo, texto):
             patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
             matches = re.findall(patron, texto, re.IGNORECASE)
-            if matches: return float(matches[-1].replace('.', '').replace(',', '.'))
-            return 0.0
+             matches = re.findall(patron, texto, re.IGNORECASE)
+        if matches:
+            # Usamos [-1] porque el valor de la sección "Información adicional" (81,32)
+            # aparece cronológicamente después de la tabla de consumo en el OCR.
+            return float(matches[-1].replace('.', '').replace(',', '.'))
+        return 0.0
 
         consumos = {
             'punta': extraer_kwh('Punta', texto_completo),
