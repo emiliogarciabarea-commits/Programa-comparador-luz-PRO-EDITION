@@ -112,8 +112,7 @@ def extraer_datos_factura(pdf_path):
     # Backup en caso de que no encuentre desglosados (mantiene tu lógica original)
     if sum(consumos.values()) == 0:
         m_gen = re.search(r'(\d+)\s*kWh\s+[\d,.]+\s*€/kWh', texto_completo)
-        if m_gen: consumos['punta'] = float(m_gen.group(1))
-        
+        if m_gen: consumos['punta'] = float(m_gen.group(1)) 
     excedente = 0.0
 
     elif es_naturgy:
