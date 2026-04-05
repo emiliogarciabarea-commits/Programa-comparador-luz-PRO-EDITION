@@ -398,7 +398,7 @@ else:
                 }
             )
 
-           buffer_excel = io.BytesIO()
+            buffer_excel = io.BytesIO()
             with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
                 df_comp.to_excel(writer, index=False, sheet_name='Detalle Comparativa')
                 ranking_total.to_excel(writer, index=False, sheet_name='Ranking Ahorro')
