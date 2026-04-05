@@ -93,8 +93,6 @@ def extraer_datos_factura(pdf_path):
             matches = re.findall(patron, texto, re.IGNORECASE)
              matches = re.findall(patron, texto, re.IGNORECASE)
         if matches:
-            # Usamos [-1] porque el valor de la sección "Información adicional" (81,32)
-            # aparece cronológicamente después de la tabla de consumo en el OCR.
             return float(matches[-1].replace('.', '').replace(',', '.'))
         return 0.0
 
