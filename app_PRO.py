@@ -380,8 +380,8 @@ else:
                 with c1: st.success(f"La mejor compañía es: **{mejor_opcion_nombre}**")
                 with c2: st.metric(label="Ahorro Total Acumulado", value=f"{round(ranking_total.iloc[0]['Ahorro'], 2)} €")
 
-           tarifa_ganadora_info = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre].iloc[0]
-                df_precios_ganador = pd.DataFrame({
+            tarifa_ganadora_info = df_tarifas[df_tarifas.iloc[:, 0] == mejor_opcion_nombre].iloc[0]
+            df_precios_ganador = pd.DataFrame({
                     "Concepto": ["Compañía Ganadora", "P1 Potencia (€/kW/día)", "P2 Potencia (€/kW/día)", "Energía Punta (€/kWh)", "Energía Llano (€/kWh)", "Energía Valle (€/kWh)", "Excedente (€/kWh)"],
                     "Valor": [
                         mejor_opcion_nombre,
