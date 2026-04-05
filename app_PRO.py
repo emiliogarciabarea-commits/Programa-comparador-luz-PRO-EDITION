@@ -79,16 +79,29 @@ def extraer_datos_factura(pdf_path):
         dias = int(m_dias_meta.group(1)) if m_dias_meta else 0
         m_pot_meta = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot_meta.group(1).replace(',', '.')) if m_pot_meta else 0.0
-        m_val_c = re.search(r'Importe\s+compensado\s+por\s+excedentes.*?\*\s*([\d,.]+)', texto_completo)
-        v_consumo_final = float(m_val_c.group(1).replace(',', '.')) if m_val_c else 0.0
-        
-        m_val_c = re.search(r'([\d,.]+)\s*€\s*\*?\s*(?:\n|\s)*Potencia', texto_completo, re.IGNORECASE)
-        v_consumo_final = float(m_val_c.group(1).replace('.', '').replace(',', '.')) if m_val_c else 0.0
-        
-        # 2. Extraer subtotal de Potencia: el importe € que precede al bloque 'Otros conceptos'
-        # Detecta 7,48 en Francisco y 13,49 en Juan José
-        m_val_p = re.search(r'([\d,.]+)\s*€\s*(?:\n|\s)*Otros\s+conceptos', texto_completo, re.IGNORECASE)
-        v_potencia_final = float(m_val_p.group(1).replace('.', '').replace(',', '.')) if m_val_p else 0.0
+        v_consumo_final = 0.0
+        v_potencia_final = 0.0
+
+        # 1. Extraer Subtotal de Energía (Consumo)
+        # Buscamos el texto entre 'Consumo (real)' y 'Potencia'
+        m_bloque_cons = re.search(r'Consumo\s+\(real\)(.*?)Potencia', texto_completo, re.DOTALL | re.IGNORECASE)
+        if m_bloque_cons:
+            importes_cons = re.findall(r'([\d,.]+)\s*€', m_bloque_cons.group(1))
+            if importes_cons:
+                # El subtotal es siempre el último valor del bloque de consumo
+                v_consumo_final = float(importes_cons[-1].replace(',', '.'))
+
+        # 2. Extraer Subtotal de Potencia
+        # Buscamos el texto entre 'Potencia' y 'Otros conceptos'
+        m_bloque_pot = re.search(r'Potencia.*?kW(.*?)Otros\s+conceptos', texto_completo, re.DOTALL | re.IGNORECASE)
+        if m_bloque_pot:
+            importes_pot = re.findall(r'([\d,.]+)\s*€', m_bloque_pot.group(1))
+            if importes_pot:
+                # El subtotal es siempre el último valor del bloque de potencia
+                v_potencia_final = float(importes_pot[-1].replace(',', '.'))
+
+        # Sumamos ambos según tu requerimiento
+        total_real = v_consumo_final + v_potencia_final
 
         # Sumamos ambos según tu requerimiento
         total_real = v_consumo_final + v_potencia_final
