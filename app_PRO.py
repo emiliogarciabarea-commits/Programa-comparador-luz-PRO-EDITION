@@ -83,9 +83,6 @@ def extraer_datos_factura(pdf_path):
         v_consumo_final = float(m_val_c.group(1).replace(',', '.')) if m_val_c else 0.0
         
         # 2. Extraer importe de Potencia (7,48): Es el valor que aparece justo antes de "Otros conceptos"
-        m_val_c = re.search(r'([\d,.]+)\s*€\s*\*?\s*Potencia', texto_completo, re.IGNORECASE)
-        v_consumo_final = float(m_val_c.group(1).replace(',', '.')) if m_val_c else 0.0
-
         m_val_p = re.search(r'([\d,.]+)\s*€\s*Otros\s+conceptos', texto_completo, re.IGNORECASE)
         v_potencia_final = float(m_val_p.group(1).replace(',', '.')) if m_val_p else 0.0
 
