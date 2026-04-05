@@ -79,14 +79,20 @@ def extraer_datos_factura(pdf_path):
         dias = int(m_dias_meta.group(1)) if m_dias_meta else 0
         m_pot_meta = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
         potencia = float(m_pot_meta.group(1).replace(',', '.')) if m_pot_meta else 0.0
-        total_real = 0.0
-        lineas = texto_completo.split('\n')
-        for linea in lineas:
-            linea_limpia = linea.strip()
-            if re.search(r'^(\d{2}\.\d{2}\.\d{4})|(\d+\s+día\(s\))', linea_limpia):
-                m_valor = re.findall(r'([\d,.]+)\s*€\s*$', linea_limpia)
-                if m_valor:
-                    total_real += float(m_valor[-1].replace('.', '').replace(',', '.'))
+        m_val_c = re.search(r'Importe\s+compensado\s+por\s+excedentes.*?\*\s*([\d,.]+)', texto_completo)
+        v_consumo_final = float(m_val_c.group(1).replace(',', '.')) if m_val_c else 0.0
+        
+        # 2. Extraer importe de Potencia (7,48): Es el valor que aparece justo antes de "Otros conceptos"
+        m_val_p = re.search(r'([\d,.]+)\s*€\s*Otros\s+conceptos', texto_completo, re.IGNORECASE)
+        v_potencia_final = float(m_val_p.group(1).replace(',', '.')) if m_val_p else 0.0
+        
+        # Sumamos ambos según tu requerimiento
+        total_real = v_consumo_final + v_potencia_final
+        
+        # Fallback: Si la suma da 0, intentamos leer el cuadro de "Electricidad" de la página 1
+        if total_real == 0:
+            m_elec_p1 = re.search(r'Electricidad\s+([\d,.]+)\s*€', texto_completo)
+            total_real = float(m_elec_p1.group(1).replace(',', '.')) if m_elec_p1 else 0.0
 
         def extraer_kwh(tipo, texto):
             patron_consumo = rf'consumos\s+han\s+sido.*?{tipo}[:\s]+([\d,.]+)'
