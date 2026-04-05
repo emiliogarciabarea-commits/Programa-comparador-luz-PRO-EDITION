@@ -89,11 +89,16 @@ def extraer_datos_factura(pdf_path):
                     total_real += float(m_valor[-1].replace('.', '').replace(',', '.'))
 
         def extraer_kwh(tipo, texto):
-            patron = rf'{tipo}.*?([\d,.]+)\s*kWh'
-            matches = re.findall(patron, texto, re.IGNORECASE)
+            patron_consumo = rf'consumos\s+han\s+sido.*?{tipo}[:\s]+([\d,.]+)'
+            match_cons = re.search(patron_consumo, texto, re.IGNORECASE | re.DOTALL)
+            if match_cons:
+                return float(match_cons.group(1).replace('.', '').replace(',', '.'))
+
+        patron_gen = rf'{tipo}.*?([\d,.]+)\s*kWh'
+            matches = re.findall(patron_gen, texto, re.IGNORECASE)
             if matches: return float(matches[-1].replace('.', '').replace(',', '.'))
             return 0.0
-
+        
         consumos = {
             'punta': extraer_kwh('Punta', texto_completo),
             'llano': extraer_kwh('Llano', texto_completo),
