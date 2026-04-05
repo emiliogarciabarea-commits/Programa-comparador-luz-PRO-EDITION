@@ -71,19 +71,19 @@ def extraer_datos_factura(pdf_path):
         m_exc = re.search(r'Excedentes.*?([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
         excedente = float(m_exc.group(1).replace(',', '.')) if m_exc else 0.0
 
-   elif es_total_energies:
-    compania = "TotalEnergies"
-    m_fecha = re.search(r'Fecha\s+emisión:\s*([\d.]{10})', texto_completo, re.IGNORECASE)
-    fecha = m_fecha.group(1) if m_fecha else "No encontrada"
+    elif es_total_energies:
+        compania = "TotalEnergies"
+        m_fecha = re.search(r'Fecha\s+emisión:\s*([\d.]{10})', texto_completo, re.IGNORECASE)
+        fecha = m_fecha.group(1) if m_fecha else "No encontrada"
     
-    m_dias_meta = re.search(r'(\d+)\s+día\(s\)', texto_completo, re.IGNORECASE)
-    dias = int(m_dias_meta.group(1)) if m_dias_meta else 0
+        m_dias_meta = re.search(r'(\d+)\s+día\(s\)', texto_completo, re.IGNORECASE)
+        dias = int(m_dias_meta.group(1)) if m_dias_meta else 0
     
-    m_pot_meta = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
-    potencia = float(m_pot_meta.group(1).replace(',', '.')) if m_pot_meta else 0.0
+        m_pot_meta = re.search(r'Potencia\s+P1:\s*([\d,.]+)', texto_completo, re.IGNORECASE)
+        potencia = float(m_pot_meta.group(1).replace(',', '.')) if m_pot_meta else 0.0
     
-    total_real = 0.0
-    lineas = texto_completo.split('\n')
+        total_real = 0.0
+        lineas = texto_completo.split('\n')
     for linea in lineas:
         linea_limpia = linea.strip()
         if re.search(r'^(\d{2}\.\d{2}\.\d{4})|(\d+\s+día\(s\))', linea_limpia):
