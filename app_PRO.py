@@ -229,9 +229,24 @@ def extraer_datos_factura(pdf_path):
         m_fijo = re.search(r'Término\s+fijo\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         m_ener = re.search(r'Energía\s*([\d,.]+)\s*€', texto_completo, re.IGNORECASE)
         total_real = (float(m_fijo.group(1).replace(',', '.')) if m_fijo else 0.0) + (float(m_ener.group(1).replace(',', '.')) if m_ener else 0.0)
+        m_desglose = re.search(r'([\d,.]+)\s*kWh\s+([\d,.]+)\s*kWh\s+([\d,.]+)\s*kWh', texto_completo)
+    
+    if m_desglose:
+        consumos = {
+            'punta': float(m_desglose.group(1).replace(',', '.')),
+            'llano': float(m_desglose.group(2).replace(',', '.')),
+            'valle': float(m_desglose.group(3).replace(',', '.'))
+        }
+    else:
+        # Fallback: si no encuentra el desglose, intenta pillar el total de la pág 1 como hacías antes
         m_consumo_gen = re.search(r'Consumo\s+en\s+este\s+periodo\s*([\d,.]+)\s*kWh', texto_completo, re.IGNORECASE)
-        consumos = {'punta': float(m_consumo_gen.group(1).replace(',', '.')) if m_consumo_gen else 0.0, 'llano': 0.0, 'valle': 0.0}
-        excedente = 0.0
+        consumos = {
+            'punta': float(m_consumo_gen.group(1).replace(',', '.')) if m_consumo_gen else 0.0, 
+            'llano': 0.0, 
+            'valle': 0.0
+        }
+        
+    excedente = 0.0
 
     elif es_iberdrola:
         compania = "Iberdrola"
